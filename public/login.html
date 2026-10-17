@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MealPilot – sign in</title>
+<script src="theme.js" data-app="mealpilot"></script>
 <meta name="theme-color" content="#1d5c6e">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
@@ -12,7 +13,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
 :root{--bg:#f4f6f5;--card:#fff;--ink:#16252b;--muted:#5d6d72;--line:#dbe2e1;--accent:#1d5c6e;--accent-ink:#fff;--accent-soft:#e1eef1;--danger:#b2382a;--danger-soft:#fbe8e5}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f181c;--card:#172328;--ink:#e4eef0;--muted:#97a9ae;--line:#26363c;--accent:#6bbdd2;--accent-ink:#06171d;--accent-soft:#18323a;--danger:#f08a7c;--danger-soft:#3b1f1b}}
+@media (prefers-color-scheme: dark){:root:not([data-theme]){--bg:#0f181c;--card:#172328;--ink:#e4eef0;--muted:#97a9ae;--line:#26363c;--accent:#6bbdd2;--accent-ink:#06171d;--accent-soft:#18323a;--danger:#f08a7c;--danger-soft:#3b1f1b}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px}
@@ -53,6 +54,17 @@ input.code{font-size:1.6rem;letter-spacing:.4em;text-align:center;font-family:ui
 .pw-toggle:focus-visible{outline:2px solid var(--accent)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:420px){.row2{grid-template-columns:1fr}}
+
+/* colour themes (theme.js) */
+:root[data-theme="dark"]{--bg:#0f181c;--card:#172328;--ink:#e4eef0;--muted:#97a9ae;--line:#26363c;--accent:#6bbdd2;--accent-ink:#06171d;--accent-soft:#18323a;--danger:#f08a7c;--danger-soft:#3b1f1b;color-scheme:dark}
+:root[data-theme="dark"]{--theme-bar:#0f181c}
+:root[data-theme="mint"]{--bg:#eef8f3;--card:#fbfffd;--line:#cfe8dc;--accent:#2e7d62;--accent-soft:#d4efe3;--ink:#18302a;--muted:#4f6b62;--theme-bar:#2e7d62;color-scheme:light}
+:root[data-theme="lavender"]{--bg:#f3f0fb;--card:#fdfcff;--line:#ddd4f0;--accent:#5b4a9e;--accent-soft:#e4dcf7;--ink:#251f3d;--muted:#625a80;--theme-bar:#5b4a9e;color-scheme:light}
+:root[data-theme="peach"]{--bg:#fdf2ec;--card:#fffcfa;--line:#f1d6c7;--accent:#a8542e;--accent-soft:#fbe0d2;--ink:#3a2318;--muted:#7a5d50;--theme-bar:#a8542e;color-scheme:light}
+:root[data-theme="sky"]{--bg:#edf5fc;--card:#fbfdff;--line:#cfe1f2;--accent:#2d6a9f;--accent-soft:#d8e8f8;--ink:#17293b;--muted:#4f6377;--theme-bar:#2d6a9f;color-scheme:light}
+:root[data-theme="rose"]{--bg:#fcf0f3;--card:#fffbfc;--line:#efd0d9;--accent:#a43d5f;--accent-soft:#f7dbe3;--ink:#3a1a26;--muted:#7a5763;--theme-bar:#a43d5f;color-scheme:light}
+:root[data-theme="lemon"]{--bg:#fbf8e6;--card:#fffef6;--line:#e9e1b5;--accent:#7a6512;--accent-soft:#f3ebc2;--ink:#2f2a10;--muted:#6b6440;--theme-bar:#7a6512;color-scheme:light}
+:root{--thm-card:var(--card);--thm-ink:var(--ink);--thm-line:var(--line)}
 </style>
 </head>
 <body>

@@ -1,7 +1,7 @@
 // Offline support: the app and its recipe library load from cache when there's no signal (handy in a shop).
 // Data and logins always go to the server; the app keeps its own copy of the household data for offline use.
 const CACHE = "mealpilot-v1";
-const STATIC = ["/app.js", "/app.css", "/state.js", "/core.js", "/plan.js", "/menus.js", "/recipes.js", "/shop.js", "/household.js",
+const STATIC = ["/app.js", "/app.css", "/theme.js", "/state.js", "/core.js", "/plan.js", "/menus.js", "/recipes.js", "/shop.js", "/household.js",
   "/data/index.js", "/data/ingredients.js", "/data/recipes-indian.js", "/data/recipes-world.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

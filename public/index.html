@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MealPilot</title>
 <meta name="description" content="Plan the week's meals for your household, build the shopping list and see what it costs.">
+<script src="theme.js" data-app="mealpilot"></script>
 <meta name="theme-color" content="#1d5c6e">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -17,6 +18,7 @@
 <header class="top">
   <a class="mark" href="#plan" aria-label="MealPilot home"><img src="icons/icon-192.png" alt=""><span>MealPilot</span></a>
   <div class="who" id="who"></div>
+  <button class="theme-btn" type="button" onclick="AppTheme.open()" aria-label="Colour theme" title="Colour theme"><svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-2l-.3-.8c-.4-1.1.4-2.2 1.6-2.2H17a4 4 0 0 0 4-4c0-5-4-9-9-9Z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg></button>
 </header>
 
 <nav class="tabbar" id="tabbar" aria-label="Sections">

@@ -80,6 +80,7 @@ screen("recipes", (el) => {
     <div class="head"><div><h1>Recipes</h1><p>${S.recipes.filter((r) => !(r.meals.length === 1 && r.meals[0] === "side")).length.toLocaleString()} recipes · ${S.doc.recipes.length} added by your household</p></div>
       <button class="btn" data-act="add-recipe">${icon("plus")} Add a recipe</button></div>
     ${LIB.status === "loading" ? `<div class="msg" style="margin-bottom:10px">Loading the recipe library (${LIB.count.toLocaleString()} recipes)… <div class="progress" style="margin-top:6px"><i id="libProgress" style="width:${Math.round(LIB.progress * 100)}%"></i></div></div>` : ""}
+    ${LIB.status === "none" && !S.local ? `<p class="msg" style="margin-bottom:10px">The shared recipe library isn't on the server yet, so only the starter recipes are shown. Once it's uploaded and the site redeployed, about 50,000 more appear here.</p>` : ""}
     ${LIB.status === "error" ? `<p class="msg bad" style="margin-bottom:10px">${esc(LIB.error || "The recipe library didn't load.")} <button class="link" data-act="lib-retry">Try again</button></p>` : ""}
     <div class="row" style="flex-wrap:nowrap"><input type="search" placeholder="Search by dish or ingredient — e.g. paneer, dosa, quick chicken" value="${esc(F.q)}" data-on="rq" aria-label="Search recipes">
       ${LIB.archiveCount ? `<button class="btn quiet" data-act="search-all" title="Search all ${LIB.archiveCount.toLocaleString()} recipes">${icon("pick")} All</button>` : ""}</div>
@@ -557,7 +558,10 @@ export function openEditor(draft) {
 
 /* ---------- the dish picker used by the planner and suggestions ---------- */
 export function pickRecipe({ title = "Choose a dish", meal = "", onPick, note = "" }) {
-  const st = { q: "", meal, cuisine: "", diet: S.doc.settings.diet === "any" ? "" : S.doc.settings.diet };
+  const st = { q: "", meal, cuisine: "", diet: S.doc.settings.diet === "any" ? "" : S.doc.settings.diet, limit: 80 };
+  const NONE = `<div class="empty" style="grid-column:1/-1"><h3>No dishes match</h3></div>`;
+  const listHTML = (l) => l.slice(0, st.limit).map((x) => recipeCard(x, "pick-this")).join("") || NONE;
+  const countHTML = (l) => `${l.length.toLocaleString()} dish${l.length === 1 ? "" : "es"}${l.length > st.limit ? ` · showing ${st.limit.toLocaleString()}` : ""}`;
   const draw = (el) => {
     const list = filtered({ q: st.q, meal: st.meal, cuisine: st.cuisine, diet: st.diet, time: "", only: "", sort: "name", sides: st.meal === "side" });
     el.innerHTML = `<div class="sheet-head"><h2>${esc(title)}</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
@@ -565,11 +569,17 @@ export function pickRecipe({ title = "Choose a dish", meal = "", onPick, note = 
       <input type="search" id="pkQ" placeholder="Search dishes" value="${esc(st.q)}" autofocus>
       <div class="filters"><select id="pkMeal"><option value="">Any meal</option>${["breakfast", "lunch", "dinner", "snack", "side", "dessert"].map((m) => `<option value="${m}" ${m === st.meal ? "selected" : ""}>${C.MEAL_LABEL[m]}</option>`).join("")}</select>
         <select id="pkCuisine"><option value="">All cuisines</option>${cuisinesInUse().map((c) => `<option ${c === st.cuisine ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
-      <div class="rlist" id="pkList">${list.slice(0, 80).map((x) => recipeCard(x, "pick-this")).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No dishes match</h3></div>`}</div>`;
+      <p class="sub small" id="pkCount" style="margin:8px 0 4px">${countHTML(list)}</p>
+      <div class="rlist" id="pkList">${listHTML(list)}</div>
+      <div class="row" id="pkMoreRow" style="justify-content:center;margin-top:12px" ${list.length > st.limit ? "" : "hidden"}><button class="btn quiet" type="button" id="pkMore">Show more</button></div>`;
     const q = el.querySelector("#pkQ");
-    q.addEventListener("input", () => { st.q = q.value; const l = filtered({ q: st.q, meal: st.meal, cuisine: st.cuisine, diet: st.diet, time: "", only: "", sort: "name", sides: st.meal === "side" }); el.querySelector("#pkList").innerHTML = l.slice(0, 80).map((x) => recipeCard(x, "pick-this")).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No dishes match</h3></div>`; });
-    el.querySelector("#pkMeal").onchange = (e) => { st.meal = e.target.value; draw(el); };
-    el.querySelector("#pkCuisine").onchange = (e) => { st.cuisine = e.target.value; draw(el); };
+    let t;
+    const update = () => { const l = filtered({ q: st.q, meal: st.meal, cuisine: st.cuisine, diet: st.diet, time: "", only: "", sort: "name", sides: st.meal === "side" });
+      el.querySelector("#pkList").innerHTML = listHTML(l); el.querySelector("#pkCount").textContent = countHTML(l); el.querySelector("#pkMoreRow").hidden = l.length <= st.limit; };
+    q.addEventListener("input", () => { st.q = q.value; st.limit = 80; clearTimeout(t); t = setTimeout(update, 150); });
+    el.querySelector("#pkMore").onclick = () => { st.limit += 80; update(); };
+    el.querySelector("#pkMeal").onchange = (e) => { st.meal = e.target.value; st.limit = 80; draw(el); };
+    el.querySelector("#pkCuisine").onchange = (e) => { st.cuisine = e.target.value; st.limit = 80; draw(el); };
   };
   sheet(draw, { wide: true });
   ACT["pick-this"] = (el) => { closeSheet(); onPick(el.dataset.id); };

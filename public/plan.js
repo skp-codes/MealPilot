@@ -294,11 +294,11 @@ export function boardHTML(m, { mode = "edit", canSuggest = false, suggestions = 
       for (const x of sl) { const sr = x.r && recipe(x.r); out += `<div class="sugg"><b>${esc(x.name)}</b> suggests ${sr ? `<b>${esc(sr.name)}</b>` : "a change"}${x.text ? `: “${esc(x.text)}”` : ""}</div>`; }
       out += `</div><div class="slot-actions">`;
       if (mode === "edit") {
-        if (!s.leftover) out += `<button class="icon-btn ${s.locked ? "on" : ""}" data-act="slot-lock" data-key="${key}" title="${s.locked ? "Kept when you shuffle" : "Keep when shuffling"}" aria-label="Keep this dish" aria-pressed="${!!s.locked}">${icon("lock")}</button>
-          <button class="icon-btn" data-act="slot-reroll" data-key="${key}" title="Something else" aria-label="Suggest something else">${icon("shuffle")}</button>`;
-        out += `<button class="icon-btn" data-act="slot-pick" data-key="${key}" title="Choose a dish" aria-label="Choose a dish">${icon("pick")}</button>`;
-        if (r && !s.leftover) out += `<button class="icon-btn" data-act="slot-side" data-key="${key}" title="Add a side dish" aria-label="Add a side dish">${icon("plus")}</button>`;
-        if (r) out += `<button class="icon-btn" data-act="slot-clear" data-key="${key}" title="Clear" aria-label="Clear this meal">${icon("x")}</button>`;
+        if (!s.leftover) out += `<button class="icon-btn ${s.locked ? "on" : ""}" data-act="slot-lock" data-key="${key}" title="${s.locked ? "Kept when you shuffle" : "Keep when shuffling"}" aria-label="Keep this dish" aria-pressed="${!!s.locked}">${icon("lock")}<span>${s.locked ? "Kept" : "Keep"}</span></button>
+          <button class="icon-btn" data-act="slot-reroll" data-key="${key}" title="Something else" aria-label="Suggest something else">${icon("shuffle")}<span>Other</span></button>`;
+        out += `<button class="icon-btn" data-act="slot-pick" data-key="${key}" title="Choose a dish" aria-label="Choose a dish">${icon("pick")}<span>Choose</span></button>`;
+        if (r && !s.leftover) out += `<button class="icon-btn" data-act="slot-side" data-key="${key}" title="Add a side dish" aria-label="Add a side dish">${icon("plus")}<span>Side</span></button>`;
+        if (r) out += `<button class="icon-btn" data-act="slot-clear" data-key="${key}" title="Clear" aria-label="Clear this meal">${icon("x")}<span>Clear</span></button>`;
       } else if (canSuggest) out += `<button class="btn ghost sm" data-act="menu-suggest" data-key="${key}">Suggest</button>`;
       out += `</div></div>`;
     }

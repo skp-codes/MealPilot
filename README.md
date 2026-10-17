@@ -17,6 +17,7 @@
 - **Per-household currency:** £, ₹, $ or €.
 - **Accounts** work as in ChoreWars: households approved by the site admin, household admins, invite links, join requests, password reset by email, show/hide password, and “Contact the site admin”.
 - **Installable** on phones (Add to Home Screen).
+- **Colour themes:** the palette button at the top switches between Auto (follows the phone), Light, Dark and pastel Mint, Lavender, Peach, Sky, Rose and Lemon. The choice is kept on each device.
 
 ## Recipe sources and their rules
 
