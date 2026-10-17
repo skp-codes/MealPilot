@@ -1,5 +1,5 @@
 // Plan: today's meals, the "tell MealPilot what you need" box, planner settings, and the week board.
-import { S, C, ACT, ON, screen, sheet, closeSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, store, go, ask, sym, peopleCount, recipeFactsFor } from "./state.js";
+import { S, C, ACT, ON, LIB, screen, sheet, closeSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, store, go, ask, sym, peopleCount, recipeFactsFor } from "./state.js";
 import { openRecipe, pickRecipe, cookMode, cuisinesInUse } from "./recipes.js";
 import { registerPicker, pickerHTML, fromDiet, offFromAvoid } from "./foodpick.js";
 
@@ -77,7 +77,7 @@ function settingsForm() {
     <div class="fieldset"><span class="lbl">Meals each day</span><div class="chips">${C.MEALS.map((m) => `<label class="chip"><input type="checkbox" data-on="pmeal" value="${m}" ${chk(p.meals.includes(m))}>${C.MEAL_LABEL[m]}</label>`).join("")}</div></div>
     ${ds.length ? `<div class="fieldset"><span class="lbl">Who's eating</span><div class="chips">${ds.map((d) => `<label class="chip"><input type="checkbox" data-on="pdiner" value="${esc(d.id)}" ${chk((p.diners || []).includes(d.id))}>${esc(d.name)}${d.portion && d.portion !== 1 ? ` <span style="opacity:.75">×${d.portion}</span>` : ""}</label>`).join("")}</div>
       <span class="hint">Their diets, goals and dislikes from <a href="#home">Household</a> are included.</span></div>` : ""}
-    <div class="fieldset"><span class="lbl">Cuisines <span class="hint" style="display:inline">— none ticked means any</span></span><div class="chips">${cuisinesInUse().filter((c) => C.CUISINES.includes(c) || S.recipes.some((r) => r.cuisine === c && !r.builtIn)).map((c) => `<label class="chip"><input type="checkbox" data-on="pcuisine" value="${esc(c)}" ${chk(p.cuisines.includes(c))}>${esc(c)}</label>`).join("")}</div></div>
+    <div class="fieldset"><span class="lbl">Cuisines <span class="hint" style="display:inline">— none ticked means any</span></span><div class="chips">${cuisinesInUse().filter((c) => S.cuisines.has(c)).map((c) => `<label class="chip"><input type="checkbox" data-on="pcuisine" value="${esc(c)}" ${chk(p.cuisines.includes(c))}>${esc(c)}</label>`).join("")}</div></div>
     <div class="fieldset"><span class="lbl">Goals</span><div class="chips">${Object.entries(C.GOALS).map(([k, l]) => `<label class="chip"><input type="checkbox" data-on="pgoal" value="${k}" ${chk(p.goals.includes(k))}>${l}</label>`).join("")}</div>
       ${eff.goals.filter((g) => !p.goals.includes(g)).length ? `<span class="hint">Also from people's profiles: ${eff.goals.filter((g) => !p.goals.includes(g)).map((g) => C.GOALS[g]).join(", ")}</span>` : ""}</div>
     <div class="grid3">
@@ -165,7 +165,7 @@ function makePlan(lockedOnly = null) {
   const locked = {};
   if (lockedOnly) Object.assign(locked, lockedOnly);
   else if (D && D.slots && !D.menuId) for (const s of D.slots) if (s.locked && s.d < req.days && req.meals.includes(s.m)) locked[`${s.d}|${s.m}`] = s;
-  const plan = C.planMenu(req, S.recipes, { cat: S.cat, pricer: S.pricer, favs: S.favs, today: C.isoDate(), locked });
+  const plan = C.planMenu(req, S.recipes, { cat: S.cat, pricer: S.pricer, favs: S.favs, factsFor: (r) => recipeFactsFor(r), today: C.isoDate(), locked });
   D = Object.assign({}, D && lockedOnly ? D : {}, { req: plan.req, slots: plan.slots, warnings: plan.warnings, menuId: D && lockedOnly ? D.menuId : null, name: D && lockedOnly ? D.name : null });
   saveState();
   go("plan");
@@ -217,7 +217,7 @@ ACT["slot-reroll"] = (el) => {
   const cur = slotOf(d, m);
   const avoidIds = new Set([...(cur ? cur.dishes.map((x) => x.r) : []), ...(D.rerolled || [])]);
   const req = effectiveReq(); req.seed = Math.floor(Math.random() * 1e9);
-  const plan = C.planMenu(Object.assign({}, req, { leftovers: false }), S.recipes.filter((r) => !avoidIds.has(r.id) || r.meals.includes("side")), { cat: S.cat, pricer: S.pricer, favs: S.favs, today: C.isoDate(), locked });
+  const plan = C.planMenu(Object.assign({}, req, { leftovers: false }), S.recipes.filter((r) => !avoidIds.has(r.id) || r.meals.includes("side")), { cat: S.cat, pricer: S.pricer, favs: S.favs, factsFor: (r) => recipeFactsFor(r), today: C.isoDate(), locked });
   const fresh = plan.slots.find((s) => s.d === d && s.m === m);
   if (!fresh || !fresh.dishes.length) { toast("No other dish fits your settings for this meal.", true); return; }
   const s = slotOf(d, m, true);
@@ -271,7 +271,7 @@ export function boardHTML(m, { mode = "edit", canSuggest = false, suggestions = 
       const f = r ? recipeFactsFor(r, main.s) : null;
       const sl = suggestions.filter((x) => x.d === d && x.m === meal && x.status === "open");
       out += `<div class="slot ${s.locked && mode === "edit" ? "locked" : ""} ${!r ? "empty" : ""} ${s.leftover ? "leftover" : ""}"><span class="meal">${C.MEAL_LABEL[meal]}</span><div class="dish">`;
-      if (!r) out += main ? `<span>Removed recipe</span>` : `<span>Nothing planned${mode === "edit" ? " — pick a dish" : ""}</span>`;
+      if (!r) out += main ? `<span>${String(main.r).startsWith("l:") && LIB.status !== "ready" ? "Loading recipe library…" : "Removed recipe"}</span>` : `<span>Nothing planned${mode === "edit" ? " — pick a dish" : ""}</span>`;
       else {
         out += `<button class="dish-name" data-act="plan-open" data-id="${esc(r.id)}" data-s="${main.s}">${dietDot(r.diet)} ${esc(r.name)}</button>`;
         out += s.leftover ? `<div class="dish-meta">Leftovers from ${C.dayLabel(C.addDays(m.start, s.leftover.d))} ${C.MEAL_LABEL[s.leftover.m].toLowerCase()}${mode === "edit" ? ` · <button class="link" data-act="slot-cookfresh" data-key="${key}">Cook something else</button>` : ""}</div>`

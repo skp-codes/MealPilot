@@ -27,9 +27,14 @@ export function rebuild() {
   S.cat = C.buildCatalog(INGREDIENTS, doc.ingredients, { aisles: AISLES, aisleOrder: AISLE_ORDER });
   if (!S.builtIns.length || builtInCat !== INGREDIENTS) { S.builtIns = BUILTIN_RECIPES.map((r) => C.expandBuiltIn(r, S.cat)); builtInCat = INGREDIENTS; }
   const house = (doc.recipes || []).map((r) => Object.assign({ builtIn: false }, r));
-  S.recipes = [...S.builtIns, ...house];
+  S.recipes = [...S.builtIns, ...LIB.recipes, ...house];
   S.byId = new Map(S.recipes.map((r) => [r.id, r]));
+  S.cuisines = new Set(S.recipes.map((r) => r.cuisine));
   S.pricer = C.makePricer(S.cat, doc.prices, doc.settings.currency, FX_FROM_GBP);
+  // Only forget worked-out costs when prices could have changed (recomputing 50,000 recipes on every tick is slow).
+  let entries = 0, last = ""; for (const h of Object.values(doc.prices || {})) { entries += h.length; const e = h[h.length - 1]; if (e && e.at > last) last = e.at; }
+  const sig = `${doc.settings.currency}|${entries}|${last}|${(doc.ingredients || []).length}`;
+  if (sig !== FACTS_SIG) { FACTS.clear(); FACTS_SIG = sig; }
   S.favs = new Set((doc.favRecipes || {})[S.user ? S.user.username : ""] || []);
 }
 export const recipe = (id) => S.byId.get(id);
@@ -183,7 +188,9 @@ export function refresh({ soft = false } = {}) {
   }
   const fn = RENDER[S.tab];
   if (fn) fn(document.getElementById("v-" + S.tab), S.sub);
-  if (sheetRefresh && !document.getElementById("sheetWrap").hidden) sheetRefresh();
+  // Background updates (sync, library loading) never redraw a sheet with a form in it — that would wipe what's being typed.
+  const sh = document.getElementById("sheet");
+  if (sheetRefresh && !document.getElementById("sheetWrap").hidden && !(soft && sh.querySelector("input:not([type=checkbox]), textarea, select"))) sheetRefresh();
 }
 let pendingRefresh = false;
 document.addEventListener("focusout", () => setTimeout(() => { if (pendingRefresh && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) { pendingRefresh = false; refresh(); } }, 50));
@@ -298,7 +305,69 @@ export function members() {
 }
 export function nameOf(username) { return members().get(String(username || "").toLowerCase()) || username; }
 export function peopleCount(diners = S.doc.diners) { return diners.reduce((a, d) => a + (Number(d.portion) || 1), 0) || 2; }
-export function recipeFactsFor(r, servings) { return C.recipeFacts(r, S.cat, S.pricer, servings); }
+// Recipe cost and nutrition, remembered until prices or recipes change (the library has tens of thousands).
+const FACTS = new Map();
+let FACTS_SIG = "";
+export function recipeFactsFor(r, servings) {
+  const k = r.id + "|" + (r.updatedAt || "") + "|" + (servings || "");
+  let f = FACTS.get(k);
+  if (!f) { f = C.recipeFacts(r, S.cat, S.pricer, servings); if (FACTS.size > 200000) FACTS.clear(); FACTS.set(k, f); }
+  return f;
+}
+
+/* ---------- the shared recipe library: a compact index for everything, full recipes fetched when opened ---------- */
+export const LIB = { status: "none", version: null, count: 0, recipes: [], head: null, archiveCount: 0, progress: 0 };
+const MEAL_BITS = [["breakfast", 1], ["lunch", 2], ["dinner", 4], ["snack", 8], ["side", 16], ["dessert", 32]];
+const DIET_OF = ["vegan", "veg", "egg", "nonveg"], WITH_OF = ["", "rice", "roti"];
+async function cachedJSON(url, cacheName) {
+  let cache = null;
+  try { cache = await caches.open(cacheName); const hit = await cache.match(url); if (hit) return hit.json(); } catch {}
+  const res = await fetch(url, { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Couldn't load the recipe library (" + res.status + ").");
+  if (cache) try { await cache.put(url, res.clone()); } catch {}
+  return res.json();
+}
+function expandRows(head, rows, from) {
+  const out = [];
+  rows.forEach((row, i) => {
+    const [id, name, cu, mealBits, servings, prep, cook, dietCode, spice, ftBits, withCode, nu, ings, rating] = row;
+    const ingredients = [];
+    for (let j = 0; j < ings.length; j += 3) ingredients.push({ id: head.ings[ings[j]], amount: ings[j + 1], opt: !!ings[j + 2] });
+    out.push({ id, name, cuisine: head.cu[cu], meals: MEAL_BITS.filter(([, b]) => mealBits & b).map(([m]) => m), servings, prep, cook, total: prep + cook,
+      diet: DIET_OF[dietCode], spice, ft: head.ft.filter((_, k) => ftBits & (1 << k)), with: WITH_OF[withCode] || "", nu: nu || null, ingredients, steps: null,
+      tags: [], rating: rating || null, lib: true, shard: Math.floor((from + i) / head.shard) });
+  });
+  return out;
+}
+export async function loadLibrary() {
+  if (S.local || LIB.status === "loading") return;
+  try {
+    const meta = await api("/api/lib/meta");
+    if (!meta.version) { LIB.status = "none"; return; }
+    LIB.status = "loading"; LIB.version = meta.version; LIB.count = meta.library.count; LIB.archiveCount = meta.archive.count; refresh({ soft: true });
+    const cacheName = "mp-lib-" + meta.version;
+    try { for (const k of await caches.keys()) if (k.startsWith("mp-lib-") && k !== cacheName) caches.delete(k); } catch {}
+    const head = await cachedJSON(`/api/lib/head?v=${meta.version}`, cacheName);
+    const all = [];
+    for (let p = 0; p < head.parts; p++) {
+      const part = await cachedJSON(`/api/lib/index?v=${meta.version}&p=${p}`, cacheName);
+      all.push(...expandRows(head, part.rows, part.from));
+      LIB.progress = (p + 1) / head.parts;
+      const bar = document.getElementById("libProgress"); if (bar) bar.style.width = Math.round(LIB.progress * 100) + "%";
+    }
+    LIB.head = head; LIB.recipes = all; LIB.status = "ready";
+    rebuild(); refresh({ soft: true });
+  } catch (err) { LIB.status = "error"; LIB.error = err.message; refresh({ soft: true }); }
+}
+// Full text (ingredient lines, method, source) of a library recipe.
+export async function libFull(r) {
+  if (!r || !r.lib || r.steps) return r;
+  const shard = await cachedJSON(`/api/lib/rec?v=${LIB.version}&s=${r.shard}`, "mp-lib-" + LIB.version);
+  const x = shard[r.id];
+  if (!x) throw new Error("Couldn't open this recipe — reload the app to update the library.");
+  r.steps = x.steps || []; r.lines = x.lines || []; r.image = x.image || ""; r.desc = x.desc || ""; r.source = x.source || null; r.reviews = x.reviews || 0;
+  return r;
+}
 export function downloadText(name, text, type = "application/json") {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type }));

@@ -1,5 +1,5 @@
 // MealPilot app entry: start up, show who's signed in, route between screens.
-import { S, boot, route, banner, esc, api, isAdmin } from "./state.js";
+import { S, boot, route, banner, esc, api, isAdmin, loadLibrary } from "./state.js";
 import "./plan.js";
 import "./menus.js";
 import "./recipes.js";
@@ -26,6 +26,7 @@ async function header() {
   banner();
   window.addEventListener("hashchange", route);
   route();
+  loadLibrary();
   // Keyboard: Enter/Space on clickable rows.
   document.addEventListener("keydown", (e) => {
     const el = e.target.closest && e.target.closest('[role=button][data-act]');

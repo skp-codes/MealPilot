@@ -1,5 +1,5 @@
 // Recipes: browse and search, recipe details, cook mode, add/import/edit recipes, and the dish picker used by the planner.
-import { S, C, ACT, ON, screen, sheet, closeSheet, refreshSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, isAdmin, api, ask, store, recipeFactsFor, go } from "./state.js";
+import { S, C, ACT, ON, LIB, libFull, loadLibrary, screen, sheet, closeSheet, refreshSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, isAdmin, api, ask, store, recipeFactsFor, go } from "./state.js";
 import { addToDraft, draftExists } from "./plan.js";
 import { registerPicker, pickerHTML } from "./foodpick.js";
 
@@ -9,7 +9,8 @@ if (F.diet && F.diet !== "vegan") F.diet = "";                       // older sa
 const saveF = () => store.set("recipeFilters", Object.assign({}, F, { limit: 60 }));
 
 /* ---------- list ---------- */
-function facts(r) { const f = recipeFactsFor(r); return { f, tags: C.recipeTags(r, f) }; }
+const TAGS = new WeakMap();
+function facts(r) { const f = recipeFactsFor(r); let tags = TAGS.get(f); if (!tags) { tags = C.recipeTags(r, f); TAGS.set(f, tags); } return { f, tags }; }
 function filtered(opts = {}) {
   const q = C.norm(opts.q ?? F.q);
   const words = q ? q.split(" ") : [];
@@ -24,12 +25,12 @@ function filtered(opts = {}) {
     if (off.length && !C.typesAllowed(r, new Set(off))) continue;
     if (time && (r.total || 0) > time) continue;
     if (only === "fav" && !S.favs.has(r.id)) continue;
-    if (only === "mine" && r.builtIn) continue;
+    if (only === "mine" && (r.builtIn || r.lib)) continue;
     const fx = facts(r);
     if (only === "protein" && !fx.tags.has("high-protein")) continue;
     if (only === "kid" && !fx.tags.has("kid-friendly")) continue;
     if (words.length) {
-      const hay = C.norm([r.name, r.cuisine, ...(r.tags || []), ...(r.ingredients || []).map((x) => (x.id && ingredient(x.id) ? ingredient(x.id).name : x.name))].join(" "));
+      const hay = r._hay || (r._hay = C.norm([r.name, r.cuisine, ...(r.tags || []), ...(r.ingredients || []).map((x) => (x.id && ingredient(x.id) ? ingredient(x.id).name : x.name))].join(" ")));
       if (!words.every((w) => hay.includes(w))) continue;
     }
     const nm = C.norm(r.name);
@@ -37,10 +38,10 @@ function filtered(opts = {}) {
     out.push({ r, rel, ...fx });
   }
   const sort = opts.sort ?? F.sort;
-  out.sort((a, b) => (b.rel - a.rel) || (sort === "time" ? (a.r.total || 0) - (b.r.total || 0) : sort === "cost" ? a.f.costPer - b.f.costPer : sort === "protein" ? b.f.per.protein - a.f.per.protein : a.r.name.localeCompare(b.r.name)));
+  out.sort((a, b) => (b.rel - a.rel) || (sort === "time" ? (a.r.total || 0) - (b.r.total || 0) : sort === "cost" ? a.f.costPer - b.f.costPer : sort === "protein" ? b.f.per.protein - a.f.per.protein : (a.r._sk || (a.r._sk = a.r.name.toLowerCase())) < (b.r._sk || (b.r._sk = b.r.name.toLowerCase())) ? -1 : a.r._sk > b.r._sk ? 1 : 0));
   return out;
 }
-export function cuisinesInUse() { return [...new Set([...C.CUISINES, ...S.recipes.map((r) => r.cuisine)])].filter(Boolean).sort(); }
+export function cuisinesInUse() { return [...new Set([...C.CUISINES, ...S.cuisines])].filter(Boolean).sort(); }
 const initials = (name) => name.split(/\s+/).filter((w) => /^[a-z]/i.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 export function recipeCard(x, act = "open-recipe") {
   const r = x.r;
@@ -48,14 +49,14 @@ export function recipeCard(x, act = "open-recipe") {
     <span class="rthumb">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy">` : esc(initials(r.name))}</span>
     <span><h3>${dietDot(r.diet)} ${esc(r.name)}</h3>
     <span class="sub" style="display:block">${esc(r.cuisine)} · ${mins(r.total)}${r.timesEstimated ? "*" : ""} · ${money(x.f.costPer)}/serving · ${Math.round(x.f.per.protein)} g protein</span>
-    <span class="sub" style="display:block">${[S.favs.has(r.id) && "♥ Favourite", x.tags.has("high-protein") && "Protein-rich", x.tags.has("kid-friendly") && "Kid-friendly", !r.builtIn && "Household recipe"].filter(Boolean).join(" · ")}</span></span>
+    <span class="sub" style="display:block">${[S.favs.has(r.id) && "♥ Favourite", x.tags.has("high-protein") && "Protein-rich", x.tags.has("kid-friendly") && "Kid-friendly", !r.builtIn && !r.lib && "Household recipe"].filter(Boolean).join(" · ")}</span></span>
   </button>`;
 }
 function filterBar(prefix = "rf") {
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
   return `<div class="filters">
     <select data-on="${prefix}" data-k="cuisine" aria-label="Cuisine">${opt("", "All cuisines", F.cuisine)}${cuisinesInUse().map((c) => opt(c, c, F.cuisine)).join("")}</select>
-    <select data-on="${prefix}" data-k="meal" aria-label="Meal">${opt("", "Any meal", F.meal)}${["breakfast", "lunch", "dinner", "snack", "side"].map((m) => opt(m, C.MEAL_LABEL[m], F.meal)).join("")}</select>
+    <select data-on="${prefix}" data-k="meal" aria-label="Meal">${opt("", "Any meal", F.meal)}${["breakfast", "lunch", "dinner", "snack", "side", "dessert"].map((m) => opt(m, C.MEAL_LABEL[m], F.meal)).join("")}</select>
     ${pickerHTML("recipes", { off: F.off, vegan: F.diet === "vegan" })}
     <select data-on="${prefix}" data-k="time" aria-label="Time">${opt("", "Any time", F.time)}${["15", "20", "30", "45", "60"].map((t) => opt(t, `Up to ${t} min`, F.time)).join("")}</select>
     <select data-on="${prefix}" data-k="only" aria-label="Show">${opt("", "All recipes", F.only)}${opt("fav", "Favourites", F.only)}${opt("mine", "Household recipes", F.only)}${opt("protein", "Protein-rich", F.only)}${opt("kid", "Kid-friendly", F.only)}</select>
@@ -68,7 +69,7 @@ function refreshList() {
   saveF();
   const list = filtered();
   const box = document.getElementById("rlist");
-  if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3><p>Try fewer filters, or tick more foods.</p></div>`;
+  if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || emptyList();
   const more = document.getElementById("rmore");
   if (more) more.hidden = list.length <= F.limit;
 }
@@ -76,29 +77,100 @@ function refreshList() {
 screen("recipes", (el) => {
   const list = filtered();
   el.innerHTML = `
-    <div class="head"><div><h1>Recipes</h1><p>${S.recipes.filter((r) => !(r.meals.length === 1 && r.meals[0] === "side")).length} recipes · ${S.doc.recipes.length} added by your household</p></div>
+    <div class="head"><div><h1>Recipes</h1><p>${S.recipes.filter((r) => !(r.meals.length === 1 && r.meals[0] === "side")).length.toLocaleString()} recipes · ${S.doc.recipes.length} added by your household</p></div>
       <button class="btn" data-act="add-recipe">${icon("plus")} Add a recipe</button></div>
-    <input type="search" placeholder="Search by dish or ingredient — e.g. paneer, dosa, quick chicken" value="${esc(F.q)}" data-on="rq" aria-label="Search recipes">
+    ${LIB.status === "loading" ? `<div class="msg" style="margin-bottom:10px">Loading the recipe library (${LIB.count.toLocaleString()} recipes)… <div class="progress" style="margin-top:6px"><i id="libProgress" style="width:${Math.round(LIB.progress * 100)}%"></i></div></div>` : ""}
+    ${LIB.status === "error" ? `<p class="msg bad" style="margin-bottom:10px">${esc(LIB.error || "The recipe library didn't load.")} <button class="link" data-act="lib-retry">Try again</button></p>` : ""}
+    <div class="row" style="flex-wrap:nowrap"><input type="search" placeholder="Search by dish or ingredient — e.g. paneer, dosa, quick chicken" value="${esc(F.q)}" data-on="rq" aria-label="Search recipes">
+      ${LIB.archiveCount ? `<button class="btn quiet" data-act="search-all" title="Search all ${LIB.archiveCount.toLocaleString()} recipes">${icon("pick")} All</button>` : ""}</div>
     ${filterBar()}
-    <div class="rlist" id="rlist">${list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3><p>Try fewer filters, or add your own recipe.</p></div>`}</div>
+    <div class="rlist" id="rlist">${list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || emptyList()}</div>
     <div class="row" id="rmore" style="justify-content:center;margin-top:14px" ${list.length > F.limit ? "" : "hidden"}><button class="btn quiet" data-act="more-recipes">Show more</button></div>`;
 });
-ON["rq:input"] = (el) => { F.q = el.value; saveF(); const list = filtered(); const box = document.getElementById("rlist"); if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3></div>`; };
+let rqTimer;
+ON["rq:input"] = (el) => { clearTimeout(rqTimer); rqTimer = setTimeout(() => searchNow(el), S.recipes.length > 5000 ? 180 : 0); };
+const searchNow = (el) => { F.q = el.value; saveF(); const list = filtered(); const box = document.getElementById("rlist"); if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || emptyList(); };
 ON["rf"] = (el) => { F[el.dataset.k] = el.value; F.limit = 60; saveF(); go("recipes"); };
+function emptyList() {
+  return `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3><p>Try fewer filters, or add your own recipe.</p>${F.q && LIB.archiveCount ? `<button class="btn wrap" style="margin-top:12px" data-act="search-all">Search all ${LIB.archiveCount.toLocaleString()} recipes for “${esc(F.q)}”</button>` : ""}</div>`;
+}
+
+/* ---------- search the whole archive (millions of recipes) and add one to the household ---------- */
+const SRC_NAME = { fc: "Food.com", fr: "Food.com", ak: "Archana's Kitchen", nl: "RecipeNLG", rm: "Recipe1M" };
+ACT["search-all"] = () => {
+  const st = { q: F.q, cu: F.cuisine, items: null, total: 0, approx: false, next: 0, more: false, busy: false, msg: "" };
+  const go2 = async (append) => {
+    st.busy = true; st.msg = ""; redraw();
+    try {
+      const d = await api(`/api/lib/search?q=${encodeURIComponent(st.q)}&cu=${encodeURIComponent(st.cu)}&o=${append ? st.next : 0}`);
+      st.items = append ? [...(st.items || []), ...d.items] : d.items; st.total = d.total; st.approx = d.approx; st.next = d.next; st.more = d.more;
+    } catch (e) { st.msg = e.message; }
+    st.busy = false; redraw();
+  };
+  const draw = (el) => {
+    el.innerHTML = `<div class="sheet-head"><div><h2>Search all recipes</h2><p class="sub">${LIB.archiveCount.toLocaleString()} more recipes from Food.com, Archana's Kitchen, RecipeNLG and Recipe1M. Pick one to add it to your household's recipes.</p></div><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
+      <div class="row"><input type="search" id="saQ" style="flex:1 1 220px;width:auto" value="${esc(st.q)}" placeholder="e.g. lamb biryani, mushroom risotto" autofocus>
+        <select id="saCu" style="width:auto"><option value="">Any cuisine</option>${C.CUISINES.map((c) => `<option ${c === st.cu ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+        <button class="btn" data-act="sa-go">Search</button></div>
+      ${st.msg ? `<p class="msg bad" style="margin-top:10px">${esc(st.msg)}</p>` : ""}
+      ${st.items ? (st.items.length ? `<p class="sub small" style="margin:10px 0 4px">${st.approx ? "No recipe has all those words — closest matches:" : `${st.total.toLocaleString()} recipe${st.total === 1 ? "" : "s"} found${st.total >= 20000 ? " (showing the best)" : ""}`}</p>
+        ${st.items.map((x) => `<button class="rcard" style="margin-top:8px" data-act="sa-pick" data-k="${x.k}"><span><h3>${esc(x.t)}</h3>
+          <span class="sub" style="display:block">${[x.cu, x.time ? mins(x.time) : "", x.v ? `serves ${x.v}` : "", x.site || SRC_NAME[x.s]].filter(Boolean).map(esc).join(" · ")}</span>
+          <span class="sub small" style="display:block">${x.lo ? "Ingredients here · method from the original website" : x.nq ? "Method included · no quantities" : "Full recipe"} · ${esc(x.preview.slice(0, 4).join(", "))}${x.n > 4 ? "…" : ""}</span></span></button>`).join("")}
+        ${st.more ? `<div class="row" style="justify-content:center;margin-top:12px"><button class="btn quiet" data-act="sa-more" ${st.busy ? "disabled" : ""}>More results</button></div>` : ""}`
+        : `<div class="empty"><h3>Nothing found</h3><p>Try fewer or simpler words.</p></div>`) : ""}
+      ${st.busy ? `<p class="sub" style="margin-top:12px">Searching…</p>` : ""}`;
+    const q = el.querySelector("#saQ"); q.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ACT["sa-go"](); } });
+  };
+  const redraw = () => refreshSheet();
+  sheet(draw, { wide: true });
+  ACT["sa-go"] = () => { const e = document.getElementById("sheet"); st.q = e.querySelector("#saQ").value.trim(); st.cu = e.querySelector("#saCu").value; if (st.q) go2(false); };
+  ACT["sa-more"] = () => go2(true);
+  ACT["sa-pick"] = (b) => previewArchive(Number(b.dataset.k));
+  if (st.q) go2(false);
+};
+async function previewArchive(k) {
+  let d;
+  try { d = await api(`/api/lib/arc?k=${k}`); } catch (e) { toast(e.message, true); return; }
+  const r = d.recipe;
+  sheet((el) => {
+    el.innerHTML = `<div class="sheet-head"><div><h2>${esc(r.t)}</h2><p class="sub">${[r.cu, r.T ? mins(r.T) : r.p != null && r.c != null ? mins(r.p + r.c) : "", r.v ? `serves ${r.v}` : ""].filter(Boolean).map(esc).join(" · ")}</p></div><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
+      <h3>Ingredients</h3><ul class="ings">${(r.l || []).map((t) => `<li><span class="n">${esc(t)}</span></li>`).join("")}</ul>
+      ${r.d && r.d.length ? `<h3 style="margin-top:14px">Method</h3><ol class="steps">${r.d.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>` : `<p class="msg" style="margin-top:14px">The method for this one comes from the original website${r.u ? ` (<a href="${esc(r.u)}" target="_blank" rel="noopener noreferrer">${esc(new URL(r.u).hostname.replace(/^www\./, ""))}</a>)` : ""} — MealPilot fetches it when you add the recipe.</p>`}
+      <div class="sheet-foot"><button class="btn quiet" data-act="search-all">Back to results</button><button class="btn" data-act="sa-add">Add to my recipes</button></div>`;
+  }, { wide: true });
+  ACT["sa-add"] = async (b) => {
+    b.disabled = true; b.textContent = "Adding…";
+    const base = { name: r.t, ingredients: r.l || [], steps: r.d || [], prep: r.p ?? null, cook: r.c ?? null, total: r.T ?? null, servings: r.v || null, cuisine: r.cu || "", category: "", keywords: "", image: r.im || "",
+      source: { type: "dataset", site: r.u ? new URL(r.u).hostname.replace(/^www\./, "") : SRC_NAME[r.s], url: r.u || "", author: "" } };
+    if (r.lo && r.u) {
+      try { const imp = await api("/api/import/url", { body: { url: r.u } }); const draft = fromImported(imp.recipe); if (!draft.cuisine && r.cu) draft.cuisine = r.cu; return openEditor(draft); }
+      catch (e) { const draft = fromImported(base); draft.note = `Couldn't fetch the method from ${base.source.site}: ${e.message} Paste the method below, or open the link.`; return openEditor(draft); }
+    }
+    const draft = fromImported(base);
+    if (r.nq) draft.note = "This recipe came without quantities — add them to each ingredient so shopping lists and costs work.";
+    openEditor(draft);
+  };
+}
+
+ACT["lib-retry"] = () => { LIB.status = "none"; loadLibrary(); };
 ACT["more-recipes"] = () => { F.limit += 60; go("recipes"); };
 ACT["open-recipe"] = (el) => openRecipe(el.dataset.id);
 
 /* ---------- recipe details ---------- */
 export function openRecipe(id, opts = {}) {
-  const st = { servings: opts.servings || null };
+  const st = { servings: opts.servings || null, err: "" };
+  const r0 = recipe(id);
+  if (r0 && r0.lib && !r0.steps) libFull(r0).then(() => refreshSheet()).catch((e) => { st.err = e.message; refreshSheet(); });
   sheet((el) => {
     const r = recipe(id);
-    if (!r) { el.innerHTML = `<div class="empty"><h3>This recipe was removed</h3></div><div class="sheet-foot"><button class="btn" data-act="close-sheet">Close</button></div>`; return; }
+    if (!r) { el.innerHTML = `<div class="empty"><h3>${id.startsWith("l:") && LIB.status === "loading" ? "The recipe library is still loading…" : "This recipe was removed"}</h3></div><div class="sheet-foot"><button class="btn" data-act="close-sheet">Close</button></div>`; return; }
+    const loading = r.lib && !r.steps;
     const s = st.servings || r.servings;
     const f = recipeFactsFor(r, s);
     const tags = C.recipeTags(r, recipeFactsFor(r));
     const k = s / r.servings;
-    const canEdit = !r.builtIn && (r.createdBy === me() || isAdmin());
+    const canEdit = !r.builtIn && !r.lib && (r.createdBy === me() || isAdmin());
     el.innerHTML = `
       ${r.image ? `<div class="rhero"><img src="${esc(r.image)}" alt=""></div>` : ""}
       <div class="sheet-head"><div><h2>${dietDot(r.diet)} ${esc(r.name)}</h2>
@@ -115,21 +187,22 @@ export function openRecipe(id, opts = {}) {
         <span class="sub small">${f.billPriced ? `${f.billPriced} of ${f.counted} prices from your bills` : "Prices are starter estimates until you scan bills"}${f.unknown ? ` · ${f.unknown} unpriced` : ""}</span></div>
       <p class="sub small" style="margin-top:10px">Per serving: <b>${Math.round(f.per.kcal)}</b> kcal · <b>${Math.round(f.per.protein)} g</b> protein · ${Math.round(f.per.carbs)} g carbs · ${Math.round(f.per.fat)} g fat · ${Math.round(f.per.fibre)} g fibre <span class="muted">(estimates)</span></p>
       <h3 style="margin-top:16px">Ingredients</h3>
-      <ul class="ings">${(r.ingredients || []).map((x) => {
+      ${loading ? `<p class="sub" style="margin-top:12px">${st.err ? esc(st.err) : "Loading the full recipe…"}</p>` : ""}
+      <ul class="ings">${(r.lines || r.ingredients || []).map((x) => {
         const ing = x.id && ingredient(x.id);
         const q = x.q != null ? C.fmtQty(x.q * k, x.u) : x.amount && ing ? C.fmtBase(x.amount * k, ing) : "";
         return `<li class="${ing ? "" : "unmatched"}"><span class="q">${esc(q)}</span><span class="n">${esc(ing ? ing.name : x.name)}${x.opt ? " <span class='muted'>(optional)</span>" : ""}${x.note ? ` <span class="note">— ${esc(x.note)}</span>` : ""}</span></li>`;
       }).join("")}</ul>
       <h3 style="margin-top:16px">Method</h3>
       <ol class="steps">${(r.steps || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
-      ${r.source && (r.source.url || r.source.site) ? `<p class="sub small" style="margin-top:12px">Recipe from ${r.source.url ? `<a href="${esc(r.source.url)}" target="_blank" rel="noopener noreferrer">${esc(r.source.site || r.source.url)}</a>` : esc(r.source.site)}${r.source.author ? ` by ${esc(r.source.author)}` : ""}. Saved to your household's own recipe book.</p>` : r.builtIn ? `<p class="sub small" style="margin-top:12px">A MealPilot starter recipe.</p>` : ""}
+      ${r.lib && r.source ? `<p class="sub small" style="margin-top:12px">From the MealPilot recipe library${r.source.site ? ` · originally from ${r.source.url ? `<a href="${esc(r.source.url)}" target="_blank" rel="noopener noreferrer">${esc(r.source.site)}</a>` : esc(r.source.site)}` : ""}${r.source.author ? ` by ${esc(r.source.author)}` : ""}${r.rating ? ` · rated ${r.rating}/5${r.reviews ? ` by ${r.reviews} cooks` : ""}` : ""}.</p>` : r.source && (r.source.url || r.source.site) ? `<p class="sub small" style="margin-top:12px">Recipe from ${r.source.url ? `<a href="${esc(r.source.url)}" target="_blank" rel="noopener noreferrer">${esc(r.source.site || r.source.url)}</a>` : esc(r.source.site)}${r.source.author ? ` by ${esc(r.source.author)}` : ""}. Saved to your household's own recipe book.</p>` : r.builtIn ? `<p class="sub small" style="margin-top:12px">A MealPilot starter recipe.</p>` : ""}
       <div class="sheet-foot" style="justify-content:space-between">
         <button class="btn quiet sm ${S.favs.has(r.id) ? "on" : ""}" data-act="fav-recipe" data-id="${esc(r.id)}">${S.favs.has(r.id) ? "♥ Favourite" : "♡ Favourite"}</button>
         <div class="row">
           ${canEdit ? `<button class="btn ghost sm" data-act="edit-recipe" data-id="${esc(r.id)}">Edit</button>` : `<button class="btn ghost sm" data-act="copy-recipe" data-id="${esc(r.id)}">Make my own version</button>`}
           <button class="btn ghost sm" data-act="recipe-to-list" data-id="${esc(r.id)}">Add to shopping list</button>
           <button class="btn ghost sm" data-act="recipe-to-menu" data-id="${esc(r.id)}">Add to a menu</button>
-          <button class="btn sm" data-act="cook" data-id="${esc(r.id)}">Cook now</button>
+          <button class="btn sm" data-act="cook" data-id="${esc(r.id)}" ${loading ? "disabled" : ""}>Cook now</button>
         </div>
       </div>`;
     ACT["rs-minus"] = () => { st.servings = Math.max(1, (st.servings || r.servings) - 1); refreshSheet(); };
@@ -143,6 +216,9 @@ ACT["edit-recipe"] = (el) => openEditor(structuredClone(recipe(el.dataset.id)));
 ACT["copy-recipe"] = (el) => {
   const r = structuredClone(recipe(el.dataset.id));
   delete r.id; r.builtIn = false; r.name = r.name + " (my version)";
+  if (r.lines) r.ingredients = r.lines;
+  delete r.lib; delete r.lines; delete r.shard; delete r.nu; delete r.ft;
+  r.source = r.source ? Object.assign({}, r.source, { type: "link" }) : null;
   r.ingredients = r.ingredients.map((x) => Object.assign({ text: x.q != null ? `${C.fmtQty(x.q, x.u)} ${ingredient(x.id) ? ingredient(x.id).name.toLowerCase() : x.name}`.trim() : x.text || x.name }, x));
   openEditor(r);
 };
@@ -151,7 +227,7 @@ function recipeToList(id, servings) {
   const k = servings / r.servings;
   const items = [];
   let staples = 0;
-  for (const x of r.ingredients) {
+  for (const x of r.lines || r.ingredients) {
     if (x.opt) continue;
     const ing = x.id && ingredient(x.id);
     if (ing && ing.free) continue;
@@ -211,6 +287,8 @@ function beep() {
   try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch {}
 }
 export function cookMode(id, servings) {
+  const r0 = recipe(id);
+  if (r0 && r0.lib && !r0.steps) { libFull(r0).then(() => cookMode(id, servings)).catch((e) => toast(e.message, true)); return; }
   closeSheet();
   const r = recipe(id);
   const k = servings / r.servings;
@@ -226,7 +304,7 @@ export function cookMode(id, servings) {
       <div class="cook-top"><button class="icon-btn" data-act="cook-close" aria-label="Close cook mode">${icon("x")}</button><h2>${esc(r.name)}</h2>
         <div class="seg"><button class="${view === "ings" ? "on" : ""}" data-act="cook-view" data-v="ings">Ingredients</button><button class="${view === "steps" ? "on" : ""}" data-act="cook-view" data-v="steps">Steps</button></div></div>
       <div class="timers" id="timers"></div>
-      <div class="cook-body">${view === "ings" ? `<p class="sub">For ${C.fmtNum(servings)} serving${servings === 1 ? "" : "s"} — tap to tick off.</p><ul class="ings cook-ings">${r.ingredients.map((x, i) => {
+      <div class="cook-body">${view === "ings" ? `<p class="sub">For ${C.fmtNum(servings)} serving${servings === 1 ? "" : "s"} — tap to tick off.</p><ul class="ings cook-ings">${(r.lines || r.ingredients).map((x, i) => {
           const ing = x.id && ingredient(x.id);
           const q = x.q != null ? C.fmtQty(x.q * k, x.u) : ing && x.amount ? C.fmtBase(x.amount * k, ing) : "";
           return `<li data-act="cook-tick" data-i="${i}" style="cursor:pointer;${ticked.has(i) ? "opacity:.45;text-decoration:line-through" : ""}"><span class="q">${esc(q)}</span><span class="n">${esc(ing ? ing.name : x.name)}${x.note ? ` <span class="note">— ${esc(x.note)}</span>` : ""}</span></li>`;
@@ -342,7 +420,7 @@ ACT["search-online"] = () => {
   const draw = (el) => {
     el.innerHTML = `<div class="sheet-head"><h2>Search recipes online</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
       <div class="row">${S.config.spoonacular ? `<div class="seg"><button class="${st.source === "mealdb" ? "on" : ""}" data-act="os-src" data-s="mealdb">TheMealDB</button><button class="${st.source === "spoonacular" ? "on" : ""}" data-act="os-src" data-s="spoonacular">Spoonacular</button></div>` : `<span class="sub small">Searching TheMealDB, a free recipe library.</span>`}</div>
-      <div class="row" style="margin-top:10px;flex-wrap:nowrap"><input type="search" id="osQ" placeholder="Dish or ingredient, e.g. lamb, biryani, soup" value="${esc(st.q)}" autofocus>
+      <div class="row" style="margin-top:10px"><input type="search" id="osQ" style="flex:1 1 220px;width:auto" placeholder="Dish or ingredient, e.g. lamb, biryani, soup" value="${esc(st.q)}" autofocus>
         <select id="osC" style="width:auto"><option value="">Any cuisine</option>${C.CUISINES.map((c) => `<option ${c === st.cuisine ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
         <button class="btn" data-act="os-go">Search</button></div>
       ${st.msg ? `<p class="msg ${/n't|not|fail|error/i.test(st.msg) ? "bad" : ""}" style="margin-top:10px">${esc(st.msg)}</p>` : ""}
@@ -385,6 +463,7 @@ export function openEditor(draft) {
     const r = st.r;
     const cuisines = cuisinesInUse();
     el.innerHTML = `<div class="sheet-head"><h2>${r.id ? "Edit recipe" : "New recipe"}</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
+      ${r.note ? `<p class="msg warn" style="margin-bottom:12px">${esc(r.note)}</p>` : ""}
       ${r.source && r.source.site ? `<p class="msg" style="margin-bottom:12px">From ${esc(r.source.site)}${r.source.author ? ` (by ${esc(r.source.author)})` : ""}. Check the details, then save it to your household's recipe book.</p>` : ""}
       <div class="stack">
         <label class="f">Name<input id="edName" value="${esc(r.name)}" placeholder="e.g. Amma's sambar" ${r.name ? "" : "autofocus"}></label>
@@ -397,7 +476,7 @@ export function openEditor(draft) {
           <label class="f">Spice<select id="edSpice">${[0, 1, 2, 3].map((n) => `<option value="${n}" ${n === Number(r.spice ?? 1) ? "selected" : ""}>${["None", "Mild", "Medium", "Hot"][n]}</option>`).join("")}</select></label>
         </div>
         ${r.timesEstimated ? `<p class="hint">The page didn't give times, so these are estimates — adjust them if you know better.</p>` : ""}
-        <div class="fieldset"><span class="lbl">Good for</span><div class="chips">${["breakfast", "lunch", "dinner", "snack", "side"].map((m) => `<label class="chip"><input type="checkbox" class="edMeal" value="${m}" ${(r.meals || []).includes(m) ? "checked" : ""}>${C.MEAL_LABEL[m]}</label>`).join("")}</div></div>
+        <div class="fieldset"><span class="lbl">Good for</span><div class="chips">${["breakfast", "lunch", "dinner", "snack", "side", "dessert"].map((m) => `<label class="chip"><input type="checkbox" class="edMeal" value="${m}" ${(r.meals || []).includes(m) ? "checked" : ""}>${C.MEAL_LABEL[m]}</label>`).join("")}</div></div>
         <label class="f">Usually served with<select id="edWith"><option value="">Nothing extra</option>${Object.keys(C.SIDE_RECIPES).map((k) => `<option value="${k}" ${k === r.with ? "selected" : ""}>${esc((recipe(C.SIDE_RECIPES[k]) || {}).name || k)}</option>`).join("")}</select><span class="hint">The planner adds it automatically when you choose “add sides”.</span></label>
         <div class="fieldset"><span class="lbl">Ingredients <span class="hint" style="display:inline">— one per line, with the amount. MealPilot matches each to its ingredient list for prices, nutrition and shopping.</span></span>
           <div id="edIngs">${st.lines.map((x, i) => {
@@ -484,7 +563,7 @@ export function pickRecipe({ title = "Choose a dish", meal = "", onPick, note = 
     el.innerHTML = `<div class="sheet-head"><h2>${esc(title)}</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
       ${note ? `<p class="sub" style="margin-bottom:8px">${esc(note)}</p>` : ""}
       <input type="search" id="pkQ" placeholder="Search dishes" value="${esc(st.q)}" autofocus>
-      <div class="filters"><select id="pkMeal"><option value="">Any meal</option>${["breakfast", "lunch", "dinner", "snack", "side"].map((m) => `<option value="${m}" ${m === st.meal ? "selected" : ""}>${C.MEAL_LABEL[m]}</option>`).join("")}</select>
+      <div class="filters"><select id="pkMeal"><option value="">Any meal</option>${["breakfast", "lunch", "dinner", "snack", "side", "dessert"].map((m) => `<option value="${m}" ${m === st.meal ? "selected" : ""}>${C.MEAL_LABEL[m]}</option>`).join("")}</select>
         <select id="pkCuisine"><option value="">All cuisines</option>${cuisinesInUse().map((c) => `<option ${c === st.cuisine ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
       <div class="rlist" id="pkList">${list.slice(0, 80).map((x) => recipeCard(x, "pick-this")).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No dishes match</h3></div>`}</div>`;
     const q = el.querySelector("#pkQ");

@@ -8,6 +8,7 @@
 - **The week board.** Tap an alternative to swap, lock dishes you like, get “something else” for one meal, choose any dish yourself, add sides, then shuffle the rest. Live totals: estimated cost against the budget, cost per day and per head, longest day in the kitchen, and protein per person.
 - **Household review.** Anyone can make a menu and share it. Everyone else can agree, ask for changes, suggest a different dish for a particular meal, and comment. Only the person who made the menu edits it, accepts or declines suggestions, and makes it final.
 - **Favourites.** Save a whole week or a single good day under any name, and reuse it any time.
+- **Recipe library.** A shared library of about 50,000 complete recipes spread across 27 cuisines (from Food.com and Archana's Kitchen), plus **Recipes → All** to search millions more (Food.com, RecipeNLG, Recipe1M) and add any of them to the household. It's built and uploaded with `tools/library/` (see its README). The app works without it.
 - **Recipes.** About 140 starter recipes (South, North and West Indian, Indo-Chinese, Italian, British, Mexican, Chinese, Thai, Japanese, Korean, Mediterranean, Middle Eastern, Spanish, French, American). Each has exact quantities, prep/cook/total time, cost and nutrition per serving, a **Contains** filter (tick or untick vegetarian, eggs, chicken, lamb, beef, pork and each kind of seafood: fish, salmon, tuna, prawns, mussels, squid, crab), a servings scaler and a step-by-step **cook mode** with timers that keeps the screen on.
 - **Add more recipes.** Import from a link (BBC Good Food, Allrecipes and most recipe sites), search **TheMealDB** or **Spoonacular**, paste recipe text, or write your own. Imported recipes are saved privately for the household and credited to their source.
 - **Shopping list.** Built from one or more menus. Untick what you have, lower amounts, then add the rest to the shared list. Pantry staples are listed separately. In the shop, items are grouped by aisle and ticks show for everyone. It works offline and syncs later.
@@ -65,6 +66,7 @@ public/
   login.html, admin.html            accounts and administration
 netlify/functions/api.mjs           accounts, households, household data, recipe import and search
 netlify/edge-functions/auth-gate.js keeps pages behind login
+tools/library/                      builds and uploads the shared recipe library (see its README)
 tests/core.test.mjs                 npm test
 ```
 

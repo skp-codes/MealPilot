@@ -2,7 +2,12 @@
   "name": "mealpilot",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/" },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "library:sample": "node tools/library/sample.mjs sample-data 25",
+    "library:build": "node tools/library/build.mjs",
+    "library:upload": "node tools/library/upload.mjs"
+  },
   "dependencies": {
     "@netlify/blobs": "^11.1.4"
   }

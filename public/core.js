@@ -6,7 +6,7 @@
    Small helpers
    ========================================================================================= */
 export const MEALS = ["breakfast", "lunch", "dinner", "snack"];
-export const MEAL_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", side: "Side" };
+export const MEAL_LABEL = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", side: "Side", dessert: "Dessert" };
 export const DIETS = { any: "Anything", nonveg: "Anything", egg: "Vegetarian + eggs", veg: "Vegetarian", vegan: "Vegan" };
 const DIET_RANK = { vegan: 0, veg: 1, egg: 2, nonveg: 3 };
 export const GOALS = {
@@ -17,24 +17,26 @@ export const GOALS = {
 export const FOOD_TYPES = [
   { k: "veg", label: "Vegetarian (no meat, fish or eggs)", ids: [] },
   { k: "egg", label: "Eggs", ids: ["eggs"] },
-  { k: "chicken", label: "Chicken", ids: ["chicken_breast", "chicken_thigh", "chicken_curry_cut"] },
+  { k: "chicken", label: "Chicken", ids: ["chicken_breast", "chicken_thigh", "chicken_curry_cut", "chicken_wings", "cooked_chicken"] },
+  { k: "turkey", label: "Turkey & duck", ids: ["turkey", "duck"] },
   { k: "lamb", label: "Lamb & mutton", ids: ["mutton", "lamb_mince"] },
   { k: "beef", label: "Beef", ids: ["beef_mince", "beef_steak"] },
-  { k: "pork", label: "Pork, bacon & ham", ids: ["pork", "bacon", "sausages", "chorizo"] },
-  { k: "fish", label: "Fish (cod, haddock, fish sauce…)", group: "seafood", ids: ["white_fish", "fish_sauce"] },
+  { k: "pork", label: "Pork, bacon & ham", ids: ["pork", "bacon", "sausages", "chorizo", "ham", "salami", "ribs"] },
+  { k: "fish", label: "Fish (cod, haddock, fish sauce…)", group: "seafood", ids: ["white_fish", "fish_sauce", "anchovies"] },
   { k: "salmon", label: "Salmon", group: "seafood", ids: ["salmon"] },
   { k: "tuna", label: "Tuna", group: "seafood", ids: ["tuna_tin"] },
   { k: "prawns", label: "Prawns & shrimp", group: "seafood", ids: ["prawns"] },
   { k: "shellfish", label: "Mussels, clams & scallops", group: "seafood", ids: ["mussels"] },
   { k: "squid", label: "Squid & octopus", group: "seafood", ids: ["squid"] },
   { k: "crab", label: "Crab & lobster", group: "seafood", ids: ["crab"] },
+  { k: "othermeat", label: "Other meat (venison, rabbit, offal…)", ids: [] },
 ];
 const TYPE_OF = new Map(FOOD_TYPES.flatMap((t) => t.ids.map((id) => [id, t.k])));
 // The food types in a recipe (optional ingredients count too, so a deselected food never sneaks in). No meat/fish/eggs → "veg".
 export function foodTypes(recipe) {
-  const out = new Set();
+  const out = new Set(recipe.ft || []);                 // library recipes also carry types read from their text
   for (const x of recipe.ingredients || []) { const t = x.id && TYPE_OF.get(x.id); if (t) out.add(t); }
-  if (![...out].some((t) => t !== "egg")) { if (!out.size) out.add("veg"); }
+  if (!out.size) out.add("veg");
   return out;
 }
 // `off` = the types switched off. A dish shows only if none of its types are off (eggs-only dishes need eggs on).
@@ -42,6 +44,19 @@ export function typesAllowed(recipe, off) {
   if (!off || !off.size) return true;
   for (const t of foodTypes(recipe)) if (off.has(t)) return false;
   return true;
+}
+// 52-bit string hash (library search shards, duplicate detection).
+export function hash52(s) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+// Words used to search recipe titles (shared by the library builder and the server's search).
+const SEARCH_STOP = new Set("the a an and or with in of on for to my best easy recipe style homemade quick simple".split(" "));
+export function searchTokens(t) {
+  return [...new Set(norm(t).split(" ").map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)).filter((w) => w.length > 1 && !SEARCH_STOP.has(w)))].slice(0, 12);
 }
 export const SIDE_RECIPES = { rice: "b:steamed-rice", roti: "b:chapati", chutney: "b:coconut-chutney", raita: "b:raita", naan: "b:warm-naan", bread: "b:toast", salad: "b:green-salad" };
 
@@ -118,7 +133,10 @@ export function buildCatalog(rows, custom = [], meta = {}) {
       entries.push({ id: ing.id, key: k, toks: k.split(" ") });
     }
   }
-  return { byId, list, exact, entries, aisles: meta.aisles || {}, aisleOrder: meta.aisleOrder || [] };
+  // Prefilter: entries by the first three letters of each word, so matching only scores likely candidates.
+  const byPrefix = new Map();
+  entries.forEach((e, i) => { for (const t of e.toks) { if (t.length < 2 || NOISE.has(t)) continue; const k = t.slice(0, 3); if (!byPrefix.has(k)) byPrefix.set(k, []); byPrefix.get(k).push(i); } });
+  return { byId, list, exact, entries, byPrefix, cache: new Map(), aisles: meta.aisles || {}, aisleOrder: meta.aisleOrder || [] };
 }
 
 // Words that describe an ingredient but don't identify it.
@@ -148,6 +166,14 @@ function tokScore(t, u) {
 export function matchIngredient(text, cat, opts = {}) {
   const k = stemAll(text);
   if (!k) return null;
+  const simple = !opts.aliases && !opts.boost;
+  const ck = k + "|" + (opts.min ?? 0.5);
+  if (simple && cat.cache && cat.cache.has(ck)) return cat.cache.get(ck);
+  const out = matchUncached(k, cat, opts);
+  if (simple && cat.cache) { if (cat.cache.size > 200000) cat.cache.clear(); cat.cache.set(ck, out); }
+  return out;
+}
+function matchUncached(k, cat, opts) {
   if (opts.aliases && opts.aliases[k]) return { id: opts.aliases[k].ing || opts.aliases[k], score: 1, learned: true };
   if (cat.exact.has(k)) return { id: cat.exact.get(k), score: 1 };
   const toks = k.split(" ").filter((t) => t.length > 1 && !NOISE.has(t));
@@ -155,7 +181,14 @@ export function matchIngredient(text, cat, opts = {}) {
   const joined = toks.join(" ");
   if (cat.exact.has(joined)) return { id: cat.exact.get(joined), score: 0.97 };
   let best = null;
-  for (const e of cat.entries) {
+  let cands = cat.entries;
+  if (cat.byPrefix) {
+    const idx = new Set();
+    for (const t of toks) for (const i of cat.byPrefix.get(t.slice(0, 3)) || []) idx.add(i);
+    if (opts.boost) cat.entries.forEach((e, i) => { if (opts.boost.has(e.id)) idx.add(i); });
+    cands = [...idx].map((i) => cat.entries[i]);
+  }
+  for (const e of cands) {
     const et = e.toks.filter((t) => !NOISE.has(t));
     if (!et.length) continue;
     let got = 0, weight = 0;
@@ -298,18 +331,32 @@ export function parseIngredientLine(line, cat, opts = {}) {
     }
   } else rest = rest.replace(/^(tins?|cans?|packs?|jars?)\s+(of\s+)?/i, "");
   rest = rest.replace(/^of\s+/i, "").trim();
-  // A size inside brackets can say how big a tin is: "1 tin (400g) chopped tomatoes".
-  if ((unit === "tin" || unit == null) && q && notes.length) {
-    const sz = notes.join(" ").match(/(\d+(?:\.\d+)?)\s*(g|ml|kg|l)\b/i);
-    if (sz && unit === "tin") { q = q * Number(sz[1]) * (/k|^l$/i.test(sz[2]) ? 1000 : 1); unit = /ml|^l$/i.test(sz[2]) ? "ml" : "g"; }
+  // Container words: "1 (8 ounce) package cream cheese", "2 (14 1/2 ounce) cans broth", "1 tin (400g) tomatoes".
+  const cont = rest.match(/^(packages?|pkgs?\.?|packets?|cans?|tins?|jars?|boxe?s?|bags?|cartons?|containers?|bottles?|envelopes?|tubs?|blocks?|bars?|sachets?|pouch(?:es)?)\b\s*(of\s+)?/i);
+  if (cont && (unit == null || unit === "pc" || unit === "tin")) { rest = rest.slice(cont[0].length); unit = unit || (/^(cans?|tins?)$/i.test(cont[1]) ? "tin" : "pack"); }
+  if (q && notes.length && (unit == null || unit === "tin" || unit === "pack" || unit === "pc")) {
+    const sz = notes.join(" ").replace(/(\d+)\s+(\d)\/(\d)/, (m, a, b, c) => String(Number(a) + Number(b) / Number(c))).match(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|kg|l|litres?|liters?|oz|ounces?|ounce|fl\.? ?oz|lbs?|pounds?)\b/i);
+    if (sz) {
+      const n = Number(sz[1]), u = sz[2].toLowerCase();
+      if (/^(oz|ounces?|ounce)$/.test(u)) { q = q * n * 28.35; unit = "g"; }
+      else if (/^fl/.test(u)) { q = q * n * 29.6; unit = "ml"; }
+      else if (/^(lbs?|pounds?)$/.test(u)) { q = q * n * 453.6; unit = "g"; }
+      else if (/^(ml)$/.test(u)) { q = q * n; unit = "ml"; }
+      else if (/^(l|litres?|liters?)$/.test(u)) { q = q * n * 1000; unit = "ml"; }
+      else if (u === "kg") { q = q * n * 1000; unit = "g"; }
+      else { q = q * n; unit = "g"; }
+    }
   }
+  if (unit === "pack") unit = "pc";
   let name = rest, note = "";
   const ci = rest.search(/,|;| - | – /);
   if (ci > 0) { name = rest.slice(0, ci).trim(); note = rest.slice(ci + 1).trim(); }
   name = name.replace(/\b(to taste|as needed|as required|for garnish|optional)\b/gi, "").trim();
   if (notes.length) note = [note, ...notes].filter(Boolean).join("; ");
   const optional = /optional/i.test(original);
-  const m = matchIngredient(name, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(name.split(" ").slice(-2).join(" "), cat, { min: 0.62 });
+  let m = matchIngredient(name, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(name.split(" ").slice(-2).join(" "), cat, { min: 0.62 });
+  // "salt and pepper", "oil or butter": use the first thing named when the whole phrase isn't a clear match.
+  if ((!m || m.score < 0.9) && /\s(and|or|&)\s/i.test(name)) { const first = matchIngredient(name.split(/\s(?:and|or|&)\s/i)[0], cat, { min: 0.6 }); if (first && (!m || first.score > m.score)) m = first; }
   const ing = m ? cat.byId.get(m.id) : null;
   const amount = ing ? toBase(q ?? defaultQty(ing), q == null ? defaultUnit(ing) : unit, ing) : 0;
   return { text: original, q, u: unit || (q == null ? null : "pc"), name: name || original, note, opt: optional,
@@ -405,6 +452,8 @@ export function recipeFacts(recipe, cat, pricer, servings) {
     if (p) { cost += p.p * amt * (x.absorb ? 0.4 : 1); priced++; if (p.src === "bill") billPriced++; }
   }
   const per = {}; for (const key in n) per[key] = Math.round((n[key] / s) * 10) / 10;
+  // Library recipes can carry the nutrition their source published (per serving), which also covers unmatched ingredients.
+  if (Array.isArray(recipe.nu) && recipe.nu[0] > 0) ["kcal", "protein", "carbs", "fat", "fibre"].forEach((key, i) => { if (recipe.nu[i] != null) per[key] = recipe.nu[i]; });
   return { servings: s, cost: r2(cost), costPer: r2(cost / s), per, priced, billPriced, counted, unknown };
 }
 export function recipeTags(recipe, facts) {
@@ -423,11 +472,19 @@ export function recipeTags(recipe, facts) {
    Reading a typed or spoken request: "Plan dinners for a family of four next week, Indian and Italian,
    no more than 30 minutes of cooking per day, £60 budget"
    ========================================================================================= */
-export const CUISINES = ["South Indian", "North Indian", "West Indian", "Indo-Chinese", "Italian", "British", "Mexican", "Chinese", "Thai", "Japanese", "Korean", "Mediterranean", "Middle Eastern", "Spanish", "French", "American"];
+export const CUISINES = ["South Indian", "North Indian", "West Indian", "East Indian", "Indo-Chinese", "Pakistani", "Sri Lankan", "Italian", "British", "Mexican", "Latin American", "Caribbean",
+  "Chinese", "Thai", "Japanese", "Korean", "Vietnamese", "Southeast Asian", "Mediterranean", "Middle Eastern", "African", "Spanish", "French", "German", "Eastern European", "Scandinavian", "American"];
 const CUISINE_WORDS = [
   [/\bsouth[\s-]*indian|tamil|kerala|keralan|chettinad|andhra|karnataka|udupi|malabar\b/, ["South Indian"]],
   [/\bnorth[\s-]*indian|punjabi|mughlai|kashmiri|delhi\b/, ["North Indian"]],
-  [/\bwest(ern)?[\s-]*indian|gujarati|maharashtrian|marathi|mumbai|goan\b/, ["West Indian"]],
+  [/\bwest(ern)?[\s-]*indian|gujarati|maharashtrian|marathi|mumbai|goan|rajasthani\b/, ["West Indian"]],
+  [/\beast(ern)?[\s-]*indian|bengali|odia|oriya|assamese|bihari\b/, ["East Indian"]],
+  [/\bpakistani\b/, ["Pakistani"]], [/\bsri[\s-]*lankan\b/, ["Sri Lankan"]],
+  [/\bvietnamese\b/, ["Vietnamese"]], [/\bmalaysian|indonesian|filipino|singaporean|burmese\b/, ["Southeast Asian"]],
+  [/\bafrican|moroccan|ethiopian|nigerian\b/, ["African"]], [/\bcaribbean|jamaican|cuban\b/, ["Caribbean"]],
+  [/\blatin[\s-]*american|brazilian|peruvian|argentinian|colombian\b/, ["Latin American"]],
+  [/\bgerman|austrian\b/, ["German"]], [/\bpolish|russian|ukrainian|hungarian|eastern european\b/, ["Eastern European"]],
+  [/\bscandinavian|swedish|norwegian|danish|nordic\b/, ["Scandinavian"]],
   [/\bindo[\s-]*chinese|desi chinese|hakka\b/, ["Indo-Chinese"]],
   [/\bitalian|pasta night\b/, ["Italian"]],
   [/\bbritish|english|scottish|irish|pub food\b/, ["British"]],
@@ -436,7 +493,7 @@ const CUISINE_WORDS = [
   [/\bthai\b/, ["Thai"]], [/\bjapanese\b/, ["Japanese"]], [/\bkorean\b/, ["Korean"]],
   [/\bmediterranean|greek\b/, ["Mediterranean"]], [/\bmiddle[\s-]*eastern|lebanese|turkish|arabic|persian\b/, ["Middle Eastern"]],
   [/\bspanish\b/, ["Spanish"]], [/\bfrench\b/, ["French"]], [/\bamerican\b/, ["American"]],
-  [/\basian\b/, ["Chinese", "Thai", "Japanese", "Korean", "Indo-Chinese"]],
+  [/\basian\b/, ["Chinese", "Thai", "Japanese", "Korean", "Indo-Chinese", "Vietnamese", "Southeast Asian"]],
   [/\beuropean|continental\b/, ["Italian", "British", "French", "Spanish", "Mediterranean"]],
 ];
 const NUM_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, a: 1, an: 1 };
@@ -509,7 +566,7 @@ export function parseRequest(text, ctx = {}) {
 
   // --- cuisines
   const cs = new Set();
-  if (/\bindian\b/.test(t) && !/\b(south|north|west|western)[\s-]*indian\b/.test(t)) ["South Indian", "North Indian", "West Indian"].forEach((c) => cs.add(c));
+  if (/\bindian\b/.test(t) && !/\b(south|north|west|western|east|eastern)[\s-]*indian\b/.test(t)) ["South Indian", "North Indian", "West Indian", "East Indian"].forEach((c) => cs.add(c));
   for (const [re, list] of CUISINE_WORDS) if (re.test(t)) list.forEach((c) => cs.add(c));
   if (cs.size) { req.cuisines = [...cs]; say("cuisines", req.cuisines.join(", ")); }
 
@@ -618,8 +675,9 @@ export function planMenu(reqIn, recipes, ctx) {
   const warnings = [];
 
   // Facts for every recipe once.
-  const facts = new Map();
-  for (const r of recipes) { const f = recipeFacts(r, cat, pricer, r.servings); facts.set(r.id, { f, tags: recipeTags(r, f) }); }
+  // Cost/nutrition worked out only for recipes that could be picked (the library can hold 50,000+).
+  const factsCache = new Map();
+  const facts = { get(id) { let v = factsCache.get(id); if (!v) { const r = byId.get(id); const f = (ctx.factsFor || ((x) => recipeFacts(x, cat, pricer, x.servings)))(r); v = { f, tags: recipeTags(r, f) }; factsCache.set(id, v); } return v; } };
   const sideFor = (r) => {
     if (!req.sides || !r.with) return null;
     const id = SIDE_RECIPES[r.with];
@@ -655,7 +713,8 @@ export function planMenu(reqIn, recipes, ctx) {
     if (!pool.length) warnings.push(`No ${MEAL_LABEL[meal].toLowerCase()} recipes match all your settings — try relaxing the time limit, diet or things to avoid.`);
     pools[meal] = pool;
   }
-  const allCosts = recipes.map((r) => facts.get(r.id).f.costPer).filter((x) => x > 0).sort((a, b) => a - b);
+  const poolIds = [...new Set(Object.values(pools).flat().map((r) => r.id))];
+  const allCosts = poolIds.map((id) => facts.get(id).f.costPer).filter((x) => x > 0).sort((a, b) => a - b);
   const medianCost = allCosts[Math.floor(allCosts.length / 2)] || 1;
   const budgetTotal = req.budget || (req.budgetPerDay ? req.budgetPerDay * req.days : null);
   const budgetWeight = goals.has("budget") ? 0.9 : 0.15;                 // a budget itself is enforced by the squeeze below
@@ -704,7 +763,15 @@ export function planMenu(reqIn, recipes, ctx) {
         if (req.maxDay) warnings.push(`${dayLabel(addDays(req.start, d))}: couldn't keep to ${req.maxDay} min in the kitchen — picked the quickest options.`);
       }
       if (!pool.length) { slots.push({ d, m: meal, dishes: [], alts: [] }); slotIndex++; continue; }
-      const ranked = pool.map((r) => ({ r, s: score(r, { lastUsed, slotIndex, dayCuisines, prevMain, cuisineCount }) })).sort((a, b) => b.s - a.s);
+      // Keep only the best few (pools can hold tens of thousands of recipes).
+      const ranked = [];
+      const sctx = { lastUsed, slotIndex, dayCuisines, prevMain, cuisineCount };
+      for (const r of pool) {
+        const sc = score(r, sctx);
+        if (ranked.length < 6 || sc > ranked[ranked.length - 1].s) {
+          ranked.push({ r, s: sc }); ranked.sort((a, b) => b.s - a.s); if (ranked.length > 6) ranked.pop();
+        }
+      }
       const pick = ranked[0].r;
       const alts = [];
       for (const x of ranked.slice(1)) { if (alts.length >= clamp(req.alts ?? 2, 0, 3)) break; if (!alts.includes(x.r.id) && x.r.id !== pick.id) alts.push(x.r.id); }
@@ -723,27 +790,33 @@ export function planMenu(reqIn, recipes, ctx) {
   // Budget: swap the priciest meals for cheaper alternatives until the plan fits (or nothing cheaper fits).
   let cost = planCost(slots, byId, cat, pricer);
   if (budgetTotal && cost > budgetTotal) {
+    const unitCost = (r) => { let c = facts.get(r.id).f.costPer; const sd = sideFor(r); if (sd) c += facts.get(sd.id).f.costPer; return c; };   // per serving
+    const cheapFirst = {};
+    for (const m of req.meals) cheapFirst[m] = pools[m].map((r) => ({ r, c: unitCost(r) })).filter((x) => x.c > 0).sort((a, b) => a.c - b.c).slice(0, 400);
+    const usedCount = new Map();
+    for (const x of slots) if (x.dishes[0] && !x.leftover) usedCount.set(x.dishes[0].r, (usedCount.get(x.dishes[0].r) || 0) + 1);
+    const maxUse = req.days > 7 ? 2 : 1;
     for (let guard = 0; guard < 200 && cost > budgetTotal; guard++) {
       let best = null;
       for (const s of slots) {
         if (s.leftover || !s.dishes.length || (ctx.locked && ctx.locked[`${s.d}|${s.m}`])) continue;
         const cur = byId.get(s.dishes[0].r); if (!cur) continue;
-        const curCost = slotCost(cur, s.dishes[0].s);
-        const dayUsed = slots.filter((x) => x.d === s.d && x !== s && !x.leftover).reduce((a, x) => a + (x.dishes[0] ? slotTime(byId.get(x.dishes[0].r) || { total: 0 }) : 0), 0);
-        for (const r of pools[s.m]) {
-          if (r.id === cur.id) continue;
+        const srv = s.dishes[0].s, curCost = unitCost(cur) * srv;
+        const dayUsed = req.maxDay ? slots.filter((x) => x.d === s.d && x !== s && !x.leftover).reduce((a, x) => a + (x.dishes[0] ? slotTime(byId.get(x.dishes[0].r) || { total: 0 }) : 0), 0) : 0;
+        for (const { r, c } of cheapFirst[s.m] || []) {
+          const saving = curCost - c * srv;
+          if (saving <= 0.01) break;                                   // sorted cheapest first: nothing cheaper beyond here
+          if (r.id === cur.id || (usedCount.get(r.id) || 0) >= maxUse) continue;
           if (req.maxDay && dayUsed + slotTime(r) > req.maxDay) continue;
-          const used = slots.filter((x) => x.dishes[0] && x.dishes[0].r === r.id).length;
-          if (used >= (req.days > 7 ? 2 : 1)) continue;
-          const c = slotCost(r, s.dishes[0].s), saving = curCost - c;
-          if (saving <= 0.01) continue;
-          const loss = facts.get(cur.id).f.per.protein > facts.get(r.id).f.per.protein && goals.has("high-protein") ? 1.5 : 1;
+          const loss = goals.has("high-protein") && facts.get(cur.id).f.per.protein > facts.get(r.id).f.per.protein ? 1.5 : 1;
           const val = saving / loss;
           if (!best || val > best.val) best = { s, r, val };
+          break;                                                        // the cheapest usable swap for this slot
         }
       }
       if (!best) break;
       const s = best.s, oldId = s.dishes[0].r, srv = s.dishes[0].s;
+      usedCount.set(oldId, (usedCount.get(oldId) || 1) - 1); usedCount.set(best.r.id, (usedCount.get(best.r.id) || 0) + 1);
       s.dishes = [{ r: best.r.id, s: srv }];
       const side = sideFor(best.r); if (side) s.dishes.push({ r: side.id, s: srv, side: true });
       s.alts = [oldId, ...s.alts.filter((x) => x !== best.r.id && x !== oldId)].slice(0, Math.max(1, req.alts ?? 2));

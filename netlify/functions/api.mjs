@@ -22,7 +22,8 @@
 import { getStore } from "@netlify/blobs";
 import { scrypt, randomBytes, randomInt, timingSafeEqual, createHmac } from "node:crypto";
 import { promisify } from "node:util";
-import { applyOp, normalizeDoc, freshDoc, uid } from "../../public/core.js";
+import { applyOp, normalizeDoc, freshDoc, uid, searchTokens, hash52 } from "../../public/core.js";
+import { gunzipSync } from "node:zlib";
 
 const scryptAsync = promisify(scrypt);
 const COOKIE = "mp_session";
@@ -809,6 +810,73 @@ async function discoverItem(s, cu, q) {
   } catch (err) { console.error(err); return json(502, { error: "Recipe search isn’t answering right now. Try again in a minute." }); }
 }
 
+/* ---------- the shared recipe library (built by tools/library, stored in Netlify Blobs) ---------- */
+const libStore = () => getStore({ name: "mp-library", consistency: "eventual" });
+const libCache = new Map();                                  // small in-memory cache per function instance
+async function libGet(key, { cache = true } = {}) {
+  if (cache && libCache.has(key)) { const v = libCache.get(key); libCache.delete(key); libCache.set(key, v); return v; }
+  const buf = await libStore().get(key, { type: "arrayBuffer" });
+  if (!buf) return null;
+  let text;
+  try { text = gunzipSync(Buffer.from(buf)).toString("utf8"); } catch { text = Buffer.from(buf).toString("utf8"); }
+  if (cache) { libCache.set(key, text); if (libCache.size > 300) libCache.delete(libCache.keys().next().value); }
+  return text;
+}
+let metaCache = { at: 0, v: null };
+async function libMeta() {
+  if (Date.now() - metaCache.at < 60000) return metaCache.v;
+  const cur = await libStore().get("current", { type: "text" });
+  const meta = cur ? JSON.parse((await libGet(`${cur}/meta.json`, { cache: false })) || "null") : null;
+  metaCache = { at: Date.now(), v: meta };
+  return meta;
+}
+const forever = { "cache-control": "private, max-age=31536000, immutable" };
+const raw = (text, headers = {}) => new Response(text, { status: 200, headers: { "content-type": "application/json", ...headers } });
+async function libRoute(path, q) {
+  const meta = await libMeta();
+  if (path === "/api/lib/meta") return json(200, meta ? { version: meta.version, library: meta.library, archive: { count: meta.archive.count }, linkOnly: meta.linkOnly } : { version: null });
+  if (!meta) return json(404, { error: "The recipe library hasn't been set up yet." });
+  const v = q.get("v") || meta.version;
+  if (!/^\d{8,14}$/.test(v)) return json(400, { error: "Bad version." });
+  if (path === "/api/lib/head" || path === "/api/lib/index" || path === "/api/lib/rec") {
+    const key = path === "/api/lib/head" ? "library/head.json" : path === "/api/lib/index" ? `library/index-${Number(q.get("p")) || 0}.json` : `library/rec-${Number(q.get("s")) || 0}.json`;
+    const text = await libGet(`${v}/${key}`, { cache: path !== "/api/lib/index" });
+    return text ? raw(text, forever) : json(404, { error: "Not found — the library may have been updated. Reload the app." });
+  }
+  if (path === "/api/lib/search") return libSearch(meta, q);
+  if (path === "/api/lib/arc") {
+    const k = Number(q.get("k"));
+    if (!(k >= 0 && k < meta.archive.count)) return json(404, { error: "Recipe not found." });
+    const shard = JSON.parse(await libGet(`${meta.version}/archive/rec-${Math.floor(k / meta.archive.shardSize)}.json`) || "[]");
+    const r = shard[k % meta.archive.shardSize];
+    return r ? json(200, { recipe: r, linkOnly: !!r.lo }) : json(404, { error: "Recipe not found." });
+  }
+  return json(404, { error: "Not found." });
+}
+// Title search over the whole archive: every word must match; if that finds little, closest matches follow.
+async function libSearch(meta, q) {
+  const toks = searchTokens(String(q.get("q") || "").slice(0, 100)).slice(0, 6);
+  if (!toks.length) return json(400, { error: "Type a dish or ingredient to search for." });
+  const offset = Math.max(0, Number(q.get("o")) || 0), cuisine = String(q.get("cu") || "");
+  const A = meta.archive, lists = [];
+  for (const t of toks) {
+    const shard = JSON.parse(await libGet(`${meta.version}/archive/post-${hash52(t) % A.postShards}.json`) || "{}");
+    const d = shard[t];
+    if (!d) { lists.push([]); continue; }
+    let acc = 0; lists.push(d.map((x) => (acc += x)));
+  }
+  const count = new Map();
+  for (const l of lists) for (const id of l) count.set(id, (count.get(id) || 0) + 1);
+  const ranked = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const all = ranked.filter(([, c]) => c === toks.length).length;
+  const pick = ranked.slice(offset, offset + (cuisine ? 120 : 24));
+  const shards = new Map();
+  await Promise.all([...new Set(pick.map(([id]) => Math.floor(id / A.shardSize)))].map(async (s) => shards.set(s, JSON.parse(await libGet(`${meta.version}/archive/rec-${s}.json`) || "[]"))));
+  let items = pick.map(([id, c]) => { const r = (shards.get(Math.floor(id / A.shardSize)) || [])[id % A.shardSize]; return r && { k: id, all: c === toks.length, t: r.t, s: r.s, cu: r.cu || "", time: r.T || (r.p != null && r.c != null ? r.p + r.c : null), v: r.v || null, lo: !!r.lo, nq: !!r.nq, n: (r.l || []).length, site: r.u ? (() => { try { return new URL(r.u).hostname.replace(/^www\./, ""); } catch { return ""; } })() : "", preview: (r.l || []).slice(0, 5) }; }).filter(Boolean);
+  if (cuisine) items = items.filter((x) => x.cu === cuisine).slice(0, 24);
+  return json(200, { total: all, approx: all === 0, items, more: offset + pick.length < ranked.length, next: offset + pick.length });
+}
+
 /* ---------- router ---------- */
 export default async (req) => {
   try {
@@ -836,6 +904,11 @@ export default async (req) => {
         return siteInfo(s);
       }
       if (path === "/api/data") return getData(req, s);
+      if (path.startsWith("/api/lib/")) {
+        const cu = await currentUser(req, s);
+        if (!cu) return json(401, { error: "Please log in again." });
+        return libRoute(path, reqUrl.searchParams);
+      }
       if (path === "/api/discover" || path === "/api/discover/item") {
         const cu = await currentUser(req, s);
         if (!cu) return json(401, { error: "Please log in again." });

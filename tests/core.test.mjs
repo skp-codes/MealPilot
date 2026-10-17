@@ -27,7 +27,7 @@ test("reads the example request", () => {
   assert.deepEqual(req.meals, ["dinner"]);
   assert.equal(req.days, 7);
   assert.equal(req.start, "2026-10-19");                          // next Monday
-  assert.deepEqual(req.cuisines.sort(), ["Italian", "North Indian", "South Indian", "West Indian"]);
+  assert.deepEqual(req.cuisines.sort(), ["East Indian", "Italian", "North Indian", "South Indian", "West Indian"]);
   assert.equal(req.maxDay, 30);
   assert.equal(req.maxTotal, undefined);
   assert.equal(req.budget, 60);
@@ -65,7 +65,7 @@ test("plans within the limits of the example request", () => {
   const used = new Set();
   for (const s of plan.slots) {
     const r = byId.get(s.dishes[0].r);
-    assert.ok(["South Indian", "North Indian", "West Indian", "Italian"].includes(r.cuisine), r.cuisine);
+    assert.ok(["South Indian", "North Indian", "West Indian", "East Indian", "Italian"].includes(r.cuisine), r.cuisine);
     assert.ok(Math.max(...s.dishes.map((x) => byId.get(x.r).total)) <= 30 + 3, `${r.id} ${r.total}`);
     assert.ok(s.dishes[0].s === 4);
     assert.ok(s.alts.length >= 1);
