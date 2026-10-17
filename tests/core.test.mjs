@@ -233,3 +233,13 @@ test("food types filter", () => {
   assert.ok(vegOnly.length > 40 && vegOnly.every((r) => ["veg", "vegan"].includes(r.diet)), vegOnly.filter((r) => !["veg", "vegan"].includes(r.diet)).map((r) => r.id).join());
   const m = C.parseIngredientLine("500g fresh mussels, cleaned", cat); assert.equal(m.id, "mussels");
 });
+
+test("planner respects the foods tick-list", () => {
+  const off = ["beef", "pork", "prawns", "fish", "salmon", "tuna", "shellfish", "squid", "crab"];
+  const plan = C.planMenu({ days: 14, meals: ["breakfast", "lunch", "dinner"], people: 3, off, seed: 11 }, recipes, { cat, pricer, today });
+  const offS = new Set(off);
+  for (const s of plan.slots) for (const x of s.dishes) assert.ok(C.typesAllowed(byId.get(x.r), offS), x.r);
+  const meatOnly = C.planMenu({ days: 5, meals: ["dinner"], people: 2, off: ["veg"], seed: 4 }, recipes, { cat, pricer, today });
+  for (const s of meatOnly.slots) { assert.ok(!C.foodTypes(byId.get(s.dishes[0].r)).has("veg"), s.dishes[0].r); }
+  assert.ok(meatOnly.slots.some((s) => s.dishes.some((x) => x.side)), "rice/roti sides still allowed when vegetarian dishes are off");
+});

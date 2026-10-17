@@ -94,7 +94,7 @@ main{max-width:980px;margin:0 auto;padding:16px}
 .icon-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-btn.on{color:var(--accent);background:var(--accent-soft)}
 .link{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:inherit}
-label.f{display:block;font-weight:700;font-size:.88rem}
+label.f,div.f{display:block;font-weight:700;font-size:.88rem}
 label.f>input,label.f>select,label.f>textarea,label.f>.pw{margin-top:5px}
 input[type=text],input[type=number],input[type=date],input[type=search],input[type=url],input[type=email],input:not([type]),select,textarea{display:block;width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-weight:400;min-height:42px}
 textarea{resize:vertical;min-height:84px;line-height:1.45}

@@ -597,7 +597,7 @@ function addTo(arr, v) { const a = arr ? arr.slice() : []; if (!a.includes(v)) a
    ========================================================================================= */
 export const PLAN_DEFAULTS = {
   start: null, days: 7, meals: ["breakfast", "lunch", "dinner"], people: 2, cuisines: [], diet: "any", goals: [], avoid: [],
-  maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, budgetPerDay: null, alts: 2, sides: true, leftovers: false, seed: 1, variety: "normal",
+  off: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, budgetPerDay: null, alts: 2, sides: true, leftovers: false, seed: 1, variety: "normal",
 };
 
 // recipes: all usable recipes (expanded). ctx: { cat, pricer, favs:Set, today, locked: { "d|meal": slot } }
@@ -613,6 +613,8 @@ export function planMenu(reqIn, recipes, ctx) {
   const byId = new Map(recipes.map((r) => [r.id, r]));
   const avoid = new Set(req.avoid || []);
   const goals = new Set(req.goals || []);
+  const offTypes = new Set(Array.isArray(req.off) ? req.off : []);
+  const sideOff = new Set([...offTypes].filter((k) => k !== "veg"));          // plain rice or roti is fine even when "vegetarian dishes" is off
   const warnings = [];
 
   // Facts for every recipe once.
@@ -622,7 +624,7 @@ export function planMenu(reqIn, recipes, ctx) {
     if (!req.sides || !r.with) return null;
     const id = SIDE_RECIPES[r.with];
     const s = id && byId.get(id);
-    return s && !(s.ingredients || []).some((x) => avoid.has(x.id) && !x.opt) ? s : null;
+    return s && !(s.ingredients || []).some((x) => avoid.has(x.id) && !x.opt) && typesAllowed(s, sideOff) && dietAllows(req.diet, s.diet) ? s : null;
   };
   const slotTime = (r) => { const s = sideFor(r); return Math.max(r.total || 0, s ? s.total || 0 : 0) + (s ? 3 : 0); };
   const slotCost = (r, srv = servings) => {
@@ -633,6 +635,7 @@ export function planMenu(reqIn, recipes, ctx) {
   const fits = (r, meal, opts = {}) => {
     if (!r.meals.includes(meal) || r.meals.includes("side") && r.meals.length === 1) return false;
     if (!dietAllows(req.diet, r.diet)) return false;
+    if (offTypes.size && !typesAllowed(r, offTypes)) return false;
     if (!opts.anyCuisine && req.cuisines.length && !req.cuisines.includes(r.cuisine)) return false;
     if (req.maxPrep && (r.prep || 0) > req.maxPrep) return false;
     if (req.maxCook && (r.cook || 0) > req.maxCook) return false;

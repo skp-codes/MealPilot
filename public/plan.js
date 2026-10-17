@@ -1,6 +1,7 @@
 // Plan: today's meals, the "tell MealPilot what you need" box, planner settings, and the week board.
 import { S, C, ACT, ON, screen, sheet, closeSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, store, go, ask, sym, peopleCount, recipeFactsFor } from "./state.js";
 import { openRecipe, pickRecipe, cookMode, cuisinesInUse } from "./recipes.js";
+import { registerPicker, pickerHTML, fromDiet, offFromAvoid } from "./foodpick.js";
 
 /* ---------- planner state (kept on this device so a half-made plan survives a reload) ---------- */
 let P = store.get("planReq", null);          // planner settings
@@ -15,10 +16,10 @@ function defaults() {
   const s = S.doc.settings;
   const diners = S.doc.diners.map((d) => d.id);
   return { start: C.nextWeekday(C.isoDate(), s.weekStart ?? 1, false) === C.isoDate() ? C.isoDate() : C.nextWeekday(C.isoDate(), s.weekStart ?? 1, true),
-    days: 7, meals: (s.meals && s.meals.length ? s.meals : ["breakfast", "lunch", "dinner"]).slice(), diners, people: null, cuisines: [], diet: s.diet || "any",
+    days: 7, meals: (s.meals && s.meals.length ? s.meals : ["breakfast", "lunch", "dinner"]).slice(), diners, people: null, cuisines: [], diet: s.diet === "vegan" ? "vegan" : "any", off: fromDiet(s.diet).off,
     goals: [], avoid: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, alts: s.alts ?? 2, sides: s.sides !== false, leftovers: !!s.leftovers, seed: 1 };
 }
-function ensureP() { if (!P) P = defaults(); if (!P.start || P.start < C.isoDate()) P.start = C.isoDate(); return P; }
+function ensureP() { if (!P) P = defaults(); if (!Array.isArray(P.off)) { const d = fromDiet(P.diet); P.off = d.off; P.diet = d.vegan ? "vegan" : "any"; } if (!P.start || P.start < C.isoDate()) P.start = C.isoDate(); return P; }
 function selectedDiners() { const ids = new Set(P.diners || []); return S.doc.diners.filter((d) => ids.has(d.id)); }
 // The request the planner gets: settings + what the chosen people need.
 function effectiveReq() {
@@ -80,7 +81,7 @@ function settingsForm() {
     <div class="fieldset"><span class="lbl">Goals</span><div class="chips">${Object.entries(C.GOALS).map(([k, l]) => `<label class="chip"><input type="checkbox" data-on="pgoal" value="${k}" ${chk(p.goals.includes(k))}>${l}</label>`).join("")}</div>
       ${eff.goals.filter((g) => !p.goals.includes(g)).length ? `<span class="hint">Also from people's profiles: ${eff.goals.filter((g) => !p.goals.includes(g)).map((g) => C.GOALS[g]).join(", ")}</span>` : ""}</div>
     <div class="grid3">
-      <label class="f">Diet<select data-on="pset" data-k="diet">${opt("any", "Anything", p.diet)}${opt("egg", "Vegetarian + eggs", p.diet)}${opt("veg", "Vegetarian", p.diet)}${opt("vegan", "Vegan", p.diet)}</select></label>
+      <div class="f"><span style="display:block;margin-bottom:5px">Foods to include</span>${pickerHTML("plan", { off: p.off || [], vegan: p.diet === "vegan" }, { label: "Foods the menu may include" })}</div>
       <label class="f">Budget for the whole plan<input type="number" min="0" step="1" data-on="pset" data-k="budget" value="${esc(p.budget ?? "")}" placeholder="No budget (${sym()})"></label>
       <label class="f">Choices per meal<select data-on="pset" data-k="alts">${[1, 2, 3].map((n) => opt(n, `Best pick + ${n} alternative${n > 1 ? "s" : ""}`, p.alts)).join("")}</select></label>
       <label class="f">Prep time per meal${timeSel("maxPrep", [10, 15, 20, 30, 45])}</label>
@@ -104,6 +105,7 @@ ON["pset"] = (el) => {
   saveState(); if (el.tagName === "SELECT" || el.type === "checkbox") rerenderPlanSoon();
 };
 ON["pset:input"] = (el) => { if (el.dataset.k === "budget" || el.dataset.k === "people") { P[el.dataset.k] = el.value === "" ? null : Number(el.value); saveState(); } };
+registerPicker("plan", () => ({ off: ensureP().off || [], vegan: P.diet === "vegan" }), (st) => { P.off = st.off; P.diet = st.vegan ? "vegan" : "any"; saveState(); });
 ON["pmeal"] = (el) => { P.meals = C.MEALS.filter((m) => (m === el.value ? el.checked : P.meals.includes(m))); saveState(); };
 ON["pdiner"] = (el) => { const s = new Set(P.diners || []); el.checked ? s.add(el.value) : s.delete(el.value); P.diners = [...s]; P.people = null; saveState(); rerenderPlanSoon(); };
 ON["pcuisine"] = (el) => { const s = new Set(P.cuisines); el.checked ? s.add(el.value) : s.delete(el.value); P.cuisines = [...s]; saveState(); };
@@ -128,6 +130,13 @@ ACT["plan-understand"] = () => {
   if (req.budget) P.budget = req.budget; else if (req.budgetPerDay) P.budget = req.budgetPerDay * (P.days || 7);
   if (req.goals) P.goals = req.goals;
   if (req.avoid) P.avoid = req.avoid;
+  { // "vegetarian", "no beef", "no seafood"… become ticks in the foods list
+    const d = fromDiet(req.diet || S.doc.settings.diet);
+    P.diet = d.vegan ? "vegan" : "any";
+    P.off = [...new Set([...d.off, ...offFromAvoid(req.avoid)])];
+    const covered = new Set(C.FOOD_TYPES.filter((t) => P.off.includes(t.k)).flatMap((t) => t.ids));
+    P.avoid = (P.avoid || []).filter((id) => !covered.has(id));
+  }
   if (req.variety) P.variety = req.variety;
   P.seed = Math.floor(Math.random() * 1e9);
   understood = u.length ? u : [{ key: "none", label: "Nothing specific — using your usual settings" }];
