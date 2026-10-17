@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · MealPilot</title>
+<meta name="theme-color" content="#1d5c6e">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--ink:#16252b;--muted:#5d6d72;--line:#dbe2e1;--accent:#1d5c6e;--accent-ink:#fff;--accent-soft:#e1eef1;--danger:#b2382a;--danger-soft:#fbe8e5;--warn-soft:#fdf2d6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f181c;--card:#172328;--ink:#e4eef0;--muted:#97a9ae;--line:#26363c;--accent:#6bbdd2;--accent-ink:#06171d;--accent-soft:#18323a;--danger:#f08a7c;--danger-soft:#3b1f1b;--warn-soft:#3a3118}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--accent);color:var(--accent-ink);padding:14px 16px 0}
+.hwrap{max-width:920px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:1.15rem}
+header a,header button.l{color:var(--accent-ink);font:inherit;font-size:.9rem;background:none;border:0;cursor:pointer;text-decoration:underline;padding:0;margin-left:12px}
+nav{max-width:920px;margin:10px auto 0;display:flex;gap:4px}
+nav button{background:none;border:0;color:var(--accent-ink);opacity:.75;padding:10px 12px;font:inherit;font-size:.95rem;border-bottom:3px solid transparent;cursor:pointer}
+nav button.active{opacity:1;border-bottom-color:var(--accent-ink);font-weight:600}
+main{max-width:920px;margin:0 auto;padding:16px}
+.panel{display:none}.panel.active{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:1.05rem}
+p.sub{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+.count{background:var(--accent);color:var(--accent-ink);border-radius:99px;font-size:.75rem;padding:1px 8px;margin-left:6px;vertical-align:2px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.item:last-child{border-bottom:0}
+.who b{display:block}
+.who span{color:var(--muted);font-size:.85rem}
+.note{font-size:.85rem;background:var(--warn-soft);border-radius:8px;padding:4px 8px;margin-top:4px;display:inline-block}
+.btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{padding:6px 12px;border-radius:9px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.secondary{background:transparent;color:var(--accent)}
+.btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+.btn:disabled{opacity:.5}
+.empty{color:var(--muted);font-size:.9rem}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+th{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.3px}
+select,input{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;font-size:.9rem}
+.pill{font-size:.75rem;border-radius:99px;padding:2px 8px;font-weight:600;white-space:nowrap}
+.pill.active{background:var(--accent-soft);color:var(--accent)}
+.pill.pending,.pill.unverified{background:var(--warn-soft)}
+.pill.disabled,.pill.suspended{background:var(--danger-soft);color:var(--danger)}
+.banner{background:var(--warn-soft);border-radius:10px;padding:10px 12px;font-size:.9rem;margin-bottom:16px}
+.invite{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.invite input{flex:1 1 260px;font-size:.85rem}
+.code{font:600 1.1rem ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px}
+.addrow{display:flex;gap:8px;flex-wrap:wrap}
+.addrow input{flex:1 1 160px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:min(400px,calc(100% - 32px));padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+.temp{font:600 1.4rem ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;background:var(--accent-soft);border-radius:10px;padding:12px;text-align:center;margin:12px 0;user-select:all}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;transition:transform .25s;max-width:calc(100% - 32px)}
+#toast:not(.show){visibility:hidden;transition:transform .25s,visibility 0s .25s}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.bad{background:var(--danger);color:#fff}
+</style>
+</head>
+<body>
+<header><div class="hwrap">
+  <h1>🛡️ Admin</h1>
+  <div><a href="/">Back to app</a><button class="l" id="logout" type="button">Log out</button></div>
+</div>
+<nav id="tabs"><button data-p="house" type="button" class="active">My household</button><button data-p="site" type="button" hidden>Site admin</button></nav>
+</header>
+<main>
+  <!-- HOUSEHOLD ADMIN -->
+  <section class="panel active" id="p-house">
+    <div id="notHouseAdmin" class="card" hidden><p class="empty" style="margin:0">You’re not an admin of your household.</p></div>
+    <div id="houseWrap" hidden>
+      <div class="card">
+        <h2>Invite people to <span id="hhName"></span></h2>
+        <p class="sub">Anyone with this link or code can register straight into your household. Make a new code if it gets shared too widely.</p>
+        <div class="invite"><input id="invLink" readonly><button class="btn secondary" id="invCopy" type="button">Copy link</button>
+          <span>Code: <span class="code" id="invCode"></span></span><button class="btn secondary" id="invNew" type="button">New code</button></div>
+        <p class="sub" style="margin:10px 0 0">People can also choose “Ask to join a household” with the name <b id="hhName2"></b> — you approve them below.</p>
+      </div>
+      <div class="card">
+        <h2>Join requests<span class="count" id="cJoin" hidden></span></h2>
+        <div id="joins"></div>
+      </div>
+      <div class="card">
+        <h2>Password reset requests<span class="count" id="cReset" hidden></span></h2>
+        <p class="sub">“Reset password” creates a temporary password to pass on; they choose a new one when they log in.</p>
+        <div id="resets"></div>
+      </div>
+      <div class="card">
+        <h2>Add a member account</h2>
+        <p class="sub">For someone without an email, like a child. You’ll get a temporary password for them.</p>
+        <form class="addrow" id="addForm"><input name="displayName" placeholder="Their name" maxlength="40" required><input name="username" placeholder="Username" maxlength="30" required>
+          <button class="btn" type="submit">Create account</button></form>
+      </div>
+      <div class="card">
+        <h2>Accounts in your household</h2>
+        <p class="sub">Disabling signs someone out straight away. Removing deletes their login (their recipes and menus stay).</p>
+        <div class="table-wrap" id="accts"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SITE ADMIN -->
+  <section class="panel" id="p-site">
+    <div class="banner" id="emailOff" hidden>Email isn’t set up yet (EMAIL_FROM plus BREVO_API_KEY or RESEND_API_KEY), so password-reset links and notifications aren’t being sent. Forgotten passwords go to household admins instead.</div>
+    <div class="card">
+      <h2>Help requests<span class="count" id="cHelp" hidden></span></h2>
+      <p class="sub">Messages sent with “Contact the site admin”.</p>
+      <div id="helpList"></div>
+    </div>
+    <div class="card">
+      <h2>Households awaiting approval<span class="count" id="cHH" hidden></span></h2>
+      <div id="pendingHH"></div>
+    </div>
+    <div class="card" id="unvCard">
+      <h2>Unverified accounts<span class="count" id="cUnv" hidden></span></h2>
+      <p class="sub">People who registered but haven’t confirmed their email.</p>
+      <div id="unverified"></div>
+    </div>
+    <div class="card">
+      <h2>All households</h2>
+      <div class="table-wrap" id="allHH"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="tempDlg">
+  <h2 style="margin:0;font-size:1.05rem">Temporary password for <span id="tempWho"></span></h2>
+  <div class="temp" id="tempPw"></div>
+  <p class="sub">Share this privately. They’ll be asked to choose a new password when they log in. It won’t be shown again.</p>
+  <div class="btns"><button class="btn" id="copyTemp" type="button">Copy</button><button class="btn secondary" id="closeTemp" type="button">Done</button></div>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const when = iso => iso ? new Date(iso).toLocaleString(undefined,{ day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : "—";
+let me = null, house = null, site = null, tt;
+function toast(m, bad){ const t = $("toast"); t.textContent = m; t.className = "show"+(bad?" bad":""); clearTimeout(tt); tt = setTimeout(()=>t.className = bad?"bad":"", 2600); }
+async function post(path, body){
+  const r = await fetch(path, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({})); if (!r.ok){ toast(d.error || "Action failed", true); return null; } return d;
+}
+function showTemp(who, pw){ $("tempWho").textContent = who; $("tempPw").textContent = pw; $("tempDlg").showModal(); }
+$("copyTemp").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("tempPw").textContent); toast("Copied"); } catch { toast("Select it and copy manually", true); } });
+$("closeTemp").addEventListener("click", () => { $("tempDlg").close(); $("tempPw").textContent = ""; });
+$("tabs").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (!b) return;
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "p-" + b.dataset.p)); });
+$("logout").addEventListener("click", async () => { await fetch("/api/logout", { method:"POST", headers:{ "content-type":"application/json" }, body:"{}" }); location.href = "/login.html"; });
+function setCount(id, n){ $(id).hidden = !n; $(id).textContent = n; }
+
+/* ---- my household ---- */
+async function loadHouse(){
+  const r = await fetch("/api/household"); if (!r.ok){ $("notHouseAdmin").hidden = false; return; }
+  house = await r.json(); $("houseWrap").hidden = false; renderHouse();
+}
+function renderHouse(){
+  const h = house.household, users = house.users;
+  $("hhName").textContent = h.name; $("hhName2").textContent = h.name;
+  $("invCode").textContent = h.inviteCode; $("invLink").value = `${location.origin}/login.html?invite=${h.inviteCode}`;
+  const joins = users.filter(u => u.membership === "pending"), resets = users.filter(u => u.resetRequested && u.membership !== "pending");
+  setCount("cJoin", joins.length); setCount("cReset", resets.length);
+  $("joins").innerHTML = joins.length ? joins.map(u => `<div class="item"><div class="who"><b>${esc(u.displayName)}</b>
+      <span>@${esc(u.username)} · ${esc(u.email)} · ${u.emailVerified ? "email verified" : "email not verified yet"} · asked ${esc(when(u.createdAt))}</span></div>
+      <div class="btns"><button class="btn" data-h="approve" data-u="${esc(u.username)}">Approve</button><button class="btn danger" data-h="reject" data-u="${esc(u.username)}">Reject</button></div></div>`).join("")
+    : `<div class="empty">No requests.</div>`;
+  $("resets").innerHTML = resets.length ? resets.map(u => `<div class="item"><div class="who"><b>${esc(u.displayName)}</b><span>@${esc(u.username)} · asked ${esc(when(u.resetRequestedAt))}</span>
+      ${u.resetNote ? `<div class="note">“${esc(u.resetNote)}”</div>` : ""}</div>
+      <div class="btns"><button class="btn" data-h="reset" data-u="${esc(u.username)}">Reset password</button><button class="btn secondary" data-h="dismissReset" data-u="${esc(u.username)}">Dismiss</button></div></div>`).join("")
+    : `<div class="empty">No requests.</div>`;
+  const list = users.filter(u => u.membership !== "pending");
+  $("accts").innerHTML = `<table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>${list.map(u => {
+    const self = u.username.toLowerCase() === me.username.toLowerCase(), owner = u.username.toLowerCase() === (h.owner || "").toLowerCase();
+    const st = u.status === "active" ? (u.locked ? "Locked" : "Active") : u.status === "unverified" ? "Email not verified" : "Disabled";
+    return `<tr><td><b>${esc(u.displayName)}</b>${self ? " (you)" : ""}<br><span style="color:var(--muted)">@${esc(u.username)}${u.email ? " · " + esc(u.email) : ""}</span></td>
+      <td>${self || owner ? (owner ? "Admin (creator)" : "Admin") : `<select data-role="${esc(u.username)}"><option value="member"${u.role==="member"?" selected":""}>Member</option><option value="admin"${u.role==="admin"?" selected":""}>Admin</option></select>`}</td>
+      <td><span class="pill ${u.status === "active" ? "active" : u.status}">${st}</span>${u.mustChange ? ' <span class="pill pending">Temp password</span>' : ""}</td>
+      <td>${esc(when(u.lastLogin))}</td>
+      <td><div class="btns">${self ? `<a class="btn secondary" href="/login.html?mode=change">Change my password</a>` : `
+        <button class="btn secondary" data-h="reset" data-u="${esc(u.username)}">Reset password</button>
+        ${u.locked ? `<button class="btn secondary" data-h="unlock" data-u="${esc(u.username)}">Unlock</button>` : ""}
+        ${owner ? "" : u.status === "disabled" ? `<button class="btn secondary" data-h="enable" data-u="${esc(u.username)}">Enable</button>` : `<button class="btn danger" data-h="disable" data-u="${esc(u.username)}">Disable</button>`}
+        ${owner ? "" : `<button class="btn danger" data-h="remove" data-u="${esc(u.username)}">Remove</button>`}`}</div></td></tr>`; }).join("")}</tbody></table>`;
+}
+const hConfirm = { reject: u => `Reject @${u}’s request?`, remove: u => `Remove @${u} from the household? Their login is deleted; their recipes and menus stay.`,
+  disable: u => `Disable @${u}? They’ll be signed out.`, reset: u => `Create a temporary password for @${u}?` };
+$("p-house").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-h]"); if (!b) return;
+  const { h, u } = b.dataset; if (hConfirm[h] && !confirm(hConfirm[h](u))) return;
+  b.disabled = true; const r = await post("/api/household/action", { action: h, username: u }); b.disabled = false;
+  if (!r) return;
+  if (h === "reset") showTemp("@" + u, r.tempPassword);
+  else toast({ approve:"Approved — they can log in now", reject:"Request rejected", remove:"Removed", disable:"Disabled", enable:"Enabled", unlock:"Unlocked", dismissReset:"Dismissed" }[h] || "Done");
+  loadHouse();
+});
+$("p-house").addEventListener("change", async e => {
+  const s = e.target.closest("select[data-role]"); if (!s) return;
+  if (!confirm(`Make @${s.dataset.role} ${s.value === "admin" ? "an admin" : "a member"}?`)){ renderHouse(); return; }
+  if (await post("/api/household/action", { action:"setRole", username: s.dataset.role, role: s.value })) toast("Role updated");
+  loadHouse();
+});
+$("invCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("invLink").value); toast("Invite link copied"); } catch { $("invLink").select(); } });
+$("invNew").addEventListener("click", async () => {
+  if (!confirm("Make a new invite code? The old link and code stop working.")) return;
+  if (await post("/api/household/action", { action:"newInvite" })){ toast("New invite code ready"); loadHouse(); }
+});
+$("addForm").addEventListener("submit", async e => {
+  e.preventDefault(); const f = e.target, d = Object.fromEntries(new FormData(f));
+  const r = await post("/api/household/action", { action:"createMember", username: d.username.trim(), displayName: d.displayName.trim() });
+  if (r){ f.reset(); showTemp(d.displayName.trim() + " (@" + d.username.trim() + ")", r.tempPassword); loadHouse(); }
+});
+
+/* ---- site admin ---- */
+async function loadSite(){
+  const r = await fetch("/api/site"); if (!r.ok) return;
+  site = await r.json(); renderSite();
+}
+function renderSite(){
+  $("emailOff").hidden = site.emailEnabled;
+  $("unvCard").hidden = !site.unverified.length;
+  const help = site.help || [], openHelp = help.filter(h => h.status === "open");
+  setCount("cHelp", openHelp.length);
+  $("helpList").innerHTML = help.length ? help.slice(0, 50).map(h => `<div class="item" style="align-items:flex-start${h.status === "open" ? "" : ";opacity:.65"}">
+      <div class="who" style="flex:1 1 300px"><b>${esc(h.topicLabel)}${h.status === "open" ? "" : " · resolved"}</b>
+        <span>${esc(h.name || "(no name)")}${h.username ? " · @" + esc(h.username) : ""}${h.household ? " · " + esc(h.household) : ""}${h.email ? " · " + esc(h.email) : ""} · ${esc(when(h.at))}</span>
+        <div style="white-space:pre-wrap;margin-top:6px;font-size:.92rem">${esc(h.message)}</div></div>
+      <div class="btns">${h.email ? `<a class="btn secondary" href="mailto:${esc(h.email)}?subject=${encodeURIComponent("Re: your MealPilot message")}">Reply</a>` : ""}
+        ${h.status === "open" ? `<button class="btn" data-s="resolveHelp" data-id="${esc(h.id)}">Mark resolved</button>` : `<button class="btn secondary" data-s="reopenHelp" data-id="${esc(h.id)}">Reopen</button>`}
+        <button class="btn danger" data-s="deleteHelp" data-id="${esc(h.id)}">Delete</button></div></div>`).join("")
+    : `<div class="empty">No messages.</div>`;
+  const pend = site.households.filter(h => h.status === "pending" || h.status === "unverified");
+  setCount("cHH", site.households.filter(h => h.status === "pending").length); setCount("cUnv", site.unverified.length);
+  $("pendingHH").innerHTML = pend.length ? pend.map(h => `<div class="item"><div class="who"><b>${esc(h.name)}</b>
+      <span>by ${esc(h.ownerName)} · ${esc(h.ownerEmail)} · ${h.status === "unverified" ? "<b>email not verified yet</b>" : "email verified"} · ${esc(when(h.createdAt))}</span></div>
+      <div class="btns"><button class="btn" data-s="approve" data-hid="${esc(h.id)}">Approve</button><button class="btn danger" data-s="reject" data-hid="${esc(h.id)}">Reject</button></div></div>`).join("")
+    : `<div class="empty">Nothing waiting.</div>`;
+  $("unverified").innerHTML = site.unverified.length ? site.unverified.map(u => `<div class="item"><div class="who"><b>${esc(u.displayName)}</b>
+      <span>@${esc(u.username)} · ${esc(u.email)} · household ${esc(u.hid || "—")} · ${esc(when(u.createdAt))}</span></div>
+      <div class="btns"><button class="btn" data-s="verifyUser" data-u="${esc(u.username)}">Mark as verified</button><button class="btn danger" data-s="deleteUser" data-u="${esc(u.username)}">Delete</button></div></div>`).join("")
+    : `<div class="empty">None.</div>`;
+  $("allHH").innerHTML = `<table><thead><tr><th>Household</th><th>Status</th><th>Members</th><th>Created by</th><th>Created</th><th></th></tr></thead><tbody>${site.households.map(h => {
+    const mine = me.hid === h.id;
+    return `<tr><td><b>${esc(h.name)}</b>${mine ? " (yours)" : ""}</td><td><span class="pill ${esc(h.status)}">${esc(h.status)}</span></td><td>${h.members}</td>
+      <td>${esc(h.ownerName)}<br><span style="color:var(--muted)">${esc(h.ownerEmail)}</span></td><td>${esc(when(h.createdAt))}</td>
+      <td><div class="btns">${mine ? "" : h.status === "active" ? `<button class="btn secondary" data-s="suspend" data-hid="${esc(h.id)}">Suspend</button>`
+        : h.status === "suspended" ? `<button class="btn secondary" data-s="reactivate" data-hid="${esc(h.id)}">Reactivate</button>` : ""}
+        ${mine ? "" : `<button class="btn danger" data-s="delete" data-hid="${esc(h.id)}">Delete</button>`}</div></td></tr>`; }).join("")}</tbody></table>`;
+}
+const sConfirm = { reject: h => `Reject the household “${h}”? Its sign-up is deleted.`, suspend: h => `Suspend “${h}”? Nobody in it can log in until reactivated.`,
+  delete: h => `Permanently delete “${h}”, all its accounts and all its menus, recipes and lists? This can’t be undone.`, deleteUser: u => `Delete the unverified account @${u}?` };
+$("p-site").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-s]"); if (!b) return;
+  const { s, hid, u, id } = b.dataset, label = hid ? (site.households.find(h => h.id === hid) || {}).name : u;
+  if (sConfirm[s] && !confirm(sConfirm[s](label))) return;
+  if (s === "delete" && prompt(`Type the household name to confirm: ${label}`) !== label){ toast("Name didn’t match — nothing deleted", true); return; }
+  if (s === "deleteHelp" && !confirm("Delete this message?")) return;
+  b.disabled = true; const r = await post("/api/site/action", { action: s, hid, username: u, id }); b.disabled = false;
+  if (!r) return;
+  toast(r.message || { approve:"Household approved", reject:"Household rejected", suspend:"Suspended", reactivate:"Reactivated", delete:"Deleted", verifyUser:"Verified", deleteUser:"Deleted", resolveHelp:"Marked resolved", reopenHelp:"Reopened", deleteHelp:"Message deleted" }[s] || "Done");
+  loadSite();
+});
+
+(async () => {
+  const r = await fetch("/api/me"); if (r.status === 401){ location.href = "/login.html?next=/admin.html"; return; }
+  me = (await r.json()).user;
+  if (me.siteAdmin){ document.querySelector('#tabs [data-p="site"]').hidden = false; loadSite(); }
+  if (me.role === "admin") loadHouse(); else { $("notHouseAdmin").hidden = false; if (me.siteAdmin) document.querySelector('#tabs [data-p="site"]').click(); }
+  setInterval(() => { if (!document.hidden && !$("tempDlg").open){ if (me.role === "admin") loadHouse(); if (me.siteAdmin) loadSite(); } }, 60000);
+})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "mealpilot",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/" },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4"
+  }
+}

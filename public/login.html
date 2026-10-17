@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MealPilot – sign in</title>
+<meta name="theme-color" content="#1d5c6e">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--ink:#16252b;--muted:#5d6d72;--line:#dbe2e1;--accent:#1d5c6e;--accent-ink:#fff;--accent-soft:#e1eef1;--danger:#b2382a;--danger-soft:#fbe8e5}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f181c;--card:#172328;--ink:#e4eef0;--muted:#97a9ae;--line:#26363c;--accent:#6bbdd2;--accent-ink:#06171d;--accent-soft:#18323a;--danger:#f08a7c;--danger-soft:#3b1f1b}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px}
+.wrap{width:100%;max-width:440px}
+.brand{text-align:center;margin-bottom:18px}
+.brand img{width:56px;height:56px;border-radius:14px}
+.brand h1{font:800 1.9rem/1.1 "Bricolage Grotesque",system-ui,sans-serif;letter-spacing:-.02em;margin:10px 0 4px}
+.brand p{margin:0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;padding:10px 4px;font:inherit;font-size:.95rem;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer}
+.tabs button.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.view{display:none}
+.view.active{display:block}
+h2{font-size:1.1rem;margin:0 0 6px}
+p.sub{margin:0 0 14px;color:var(--muted);font-size:.9rem}
+label.f{display:block;margin-bottom:12px;font-weight:600;font-size:.9rem}
+input{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-weight:400}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+input.code{font-size:1.6rem;letter-spacing:.4em;text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace}
+.btn{width:100%;padding:11px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer;margin-top:4px}
+.btn:disabled{opacity:.6;cursor:wait}
+.link{background:none;border:0;color:var(--accent);font:inherit;font-size:.9rem;cursor:pointer;padding:0;text-decoration:underline}
+.center{text-align:center;margin-top:14px}
+.msg{border-radius:10px;padding:10px 12px;font-size:.9rem;margin-bottom:14px;display:none}
+.msg.ok{display:block;background:var(--accent-soft)}
+.msg.bad{display:block;background:var(--danger-soft);color:var(--danger)}
+.hint{font-weight:400;color:var(--muted);font-size:.8rem;display:block;margin-top:4px}
+.modes{display:grid;gap:8px;margin-bottom:16px}
+.modes label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;font-size:.92rem}
+.modes label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.modes input{width:auto;margin:3px 0 0}
+.modes b{display:block}
+.modes span{color:var(--muted);font-size:.84rem}
+.pw{position:relative;display:block;margin-top:6px}
+.pw input{margin-top:0;padding-right:70px}
+.pw-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--accent);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:8px}
+.pw-toggle:focus-visible{outline:2px solid var(--accent)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>MealPilot</h1><p>Plan the week. Shop once. Know what it costs.</p></div>
+  <div class="card">
+    <div class="tabs" id="tabs">
+      <button data-view="login" type="button">Log in</button>
+      <button data-view="register" type="button">Register</button>
+    </div>
+    <div class="msg" id="msg" role="alert"></div>
+
+    <form class="view" id="v-login" novalidate onsubmit="return false">
+      <label class="f">Username or email<input name="username" autocomplete="username" required></label>
+      <label class="f">Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn" type="submit">Log in</button>
+      <div class="center"><button class="link" type="button" data-go="forgot">Forgot password?</button></div>
+    </form>
+
+    <form class="view" id="v-register" novalidate onsubmit="return false">
+      <div class="modes" id="modes">
+        <label><input type="radio" name="mode" value="create" checked><div><b>Create a new household</b><span>You’ll be its admin. The site admin approves new households — we’ll email you when it’s done.</span></div></label>
+        <label><input type="radio" name="mode" value="invite"><div><b>Join with an invite code</b><span>From your household admin — you’re in straight away.</span></div></label>
+        <label><input type="radio" name="mode" value="request"><div><b>Ask to join a household</b><span>Its admin approves your request.</span></div></label>
+      </div>
+      <label class="f" id="fHousehold">Household name<input name="household" maxlength="30" autocomplete="off" placeholder="e.g. ThePatels or flat-12b">
+        <span class="hint" id="hhHint">One word: letters, numbers, - or _ (no spaces), 3–30 characters. Must be unique.</span></label>
+      <label class="f" id="fInvite" hidden>Invite code<input name="invite" maxlength="12" autocomplete="off" style="text-transform:uppercase">
+        <span class="hint" id="inviteHint"></span></label>
+      <label class="f">Your name<input name="displayName" maxlength="40" autocomplete="name" required>
+        <span class="hint">How you’ll appear in the household, e.g. “Sharath”.</span></label>
+      <div class="row2">
+        <label class="f">Username<input name="username" maxlength="30" autocomplete="username" required></label>
+        <label class="f">Email <span class="hint" style="display:inline">(optional)</span><input name="email" type="email" autocomplete="email"><span class="hint">For password resets and updates — you can add it later</span></label>
+      </div>
+      <div class="row2">
+        <label class="f">Password<input name="password" type="password" autocomplete="new-password" required><span class="hint">8+ characters</span></label>
+        <label class="f">Confirm<input name="confirm" type="password" autocomplete="new-password" required></label>
+      </div>
+      <button class="btn" type="submit" id="regBtn">Create household</button>
+    </form>
+
+    <form class="view" id="v-verify" novalidate onsubmit="return false">
+      <h2>Check your email</h2>
+      <p class="sub" id="verifySub">Enter the 6-digit code we sent you.</p>
+      <div id="codeWrap">
+        <label class="f">Verification code<input name="code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>
+        <button class="btn" type="submit">Verify</button>
+        <div class="center"><button class="link" type="button" id="resend">Send a new code</button></div>
+      </div>
+      <div class="center"><button class="link" type="button" data-go="login">Back to log in</button></div>
+    </form>
+
+    <form class="view" id="v-forgot" novalidate onsubmit="return false">
+      <h2>Forgot your password?</h2>
+      <p class="sub" id="forgotSub">Enter your username or email.</p>
+      <label class="f">Username or email<input name="username" autocomplete="username" required></label>
+      <label class="f" id="forgotNote" hidden>Message for your household admin <span class="hint" style="display:inline">(optional)</span><input name="note" maxlength="200"></label>
+      <button class="btn" type="submit">Continue</button>
+      <div class="center"><button class="link" type="button" data-go="login">Back to log in</button></div>
+    </form>
+
+    <form class="view" id="v-reset" novalidate onsubmit="return false">
+      <h2>Choose a new password</h2>
+      <p class="sub" id="resetSub">Pick a new password for your account.</p>
+      <label class="f" id="resetCodeWrap" hidden>Reset code<input name="code" class="code" autocomplete="one-time-code" maxlength="40" required></label>
+      <label class="f">New password<input name="password" type="password" autocomplete="new-password" required><span class="hint">8+ characters</span></label>
+      <label class="f">Confirm new password<input name="confirm" type="password" autocomplete="new-password" required></label>
+      <button class="btn" type="submit">Save new password</button>
+      <div class="center"><button class="link" type="button" data-go="login">Back to log in</button></div>
+    </form>
+
+    <form class="view" id="v-help" novalidate onsubmit="return false">
+      <h2>Contact the site admin</h2>
+      <p class="sub">Stuck waiting for approval, can’t log in, or something isn’t working? Send a message.</p>
+      <label class="f">What’s it about?<select name="topic" style="display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-weight:400">
+        <option value="approval">Household approval</option><option value="login">Can’t log in / password</option>
+        <option value="household">My household</option><option value="bug">Something isn’t working</option><option value="other">Something else</option></select></label>
+      <div class="row2" id="helpWho">
+        <label class="f">Your name<input name="name" maxlength="60" autocomplete="name"></label>
+        <label class="f">Email <span class="hint" style="display:inline">(for a reply)</span><input name="email" type="email" autocomplete="email"></label>
+      </div>
+      <div class="row2" id="helpIds">
+        <label class="f">Username <span class="hint" style="display:inline">(if you have one)</span><input name="username" maxlength="30" autocomplete="username"></label>
+        <label class="f">Household <span class="hint" style="display:inline">(if any)</span><input name="household" maxlength="30"></label>
+      </div>
+      <label class="f">Message<textarea name="message" maxlength="1500" required rows="5" style="display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-weight:400;resize:vertical"></textarea></label>
+      <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+      <button class="btn" type="submit">Send message</button>
+      <div class="center"><button class="link" type="button" id="helpBack">Back</button></div>
+    </form>
+
+    <form class="view" id="v-account" novalidate onsubmit="return false">
+      <h2>Your account</h2>
+      <p class="sub" id="acctSub"></p>
+      <label class="f">Email address<input name="email" type="email" autocomplete="email">
+        <span class="hint">Used for password-reset links and household updates. Leave blank to remove it.</span></label>
+      <button class="btn" type="submit">Save email</button>
+      <div class="center"><button class="link" type="button" id="toChange">Change my password</button></div>
+      <div class="center"><button class="link" type="button" data-go="help">Contact the site admin</button></div>
+      <div class="center"><button class="link" type="button" id="acctBack">Back to the app</button></div>
+    </form>
+
+    <form class="view" id="v-change" novalidate onsubmit="return false">
+      <h2>Choose a new password</h2>
+      <p class="sub" id="changeSub">Enter your current (or temporary) password and pick a new one.</p>
+      <label class="f">Current or temporary password<input name="current" type="password" autocomplete="current-password" required></label>
+      <label class="f">New password<input name="next" type="password" autocomplete="new-password" required><span class="hint">8+ characters</span></label>
+      <label class="f">Confirm new password<input name="confirm" type="password" autocomplete="new-password" required></label>
+      <button class="btn" type="submit">Save new password</button>
+      <div class="center" id="changeBack"><button class="link" type="button" id="backToApp">Back to the app</button></div>
+    </form>
+  </div>
+  <p class="center" id="helpLink" style="font-size:.9rem;color:var(--muted)">Need help? <button class="link" type="button" data-go="help">Contact the site admin</button></p>
+</div>
+
+<script>
+(function(){
+"use strict";
+const params = new URLSearchParams(location.search);
+let next = params.get("next") || "/";
+if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) next = "/";
+const $ = id => document.getElementById(id);
+let emailEnabled = true, pendingUser = "", resetUser = "", resetToken = "";
+
+/* show / hide buttons on every password field */
+document.querySelectorAll('input[type="password"]').forEach(inp => {
+  const wrap = document.createElement("span"); wrap.className = "pw";
+  inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "pw-toggle"; b.textContent = "Show";
+  b.setAttribute("aria-label", "Show password"); b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", e => {
+    e.preventDefault();
+    const show = inp.type === "password";
+    inp.type = show ? "text" : "password";
+    b.textContent = show ? "Hide" : "Show";
+    b.setAttribute("aria-label", show ? "Hide password" : "Show password"); b.setAttribute("aria-pressed", String(show));
+    inp.focus();
+  });
+  wrap.appendChild(b);
+  inp.form && inp.form.addEventListener("reset", () => { inp.type = "password"; b.textContent = "Show"; b.setAttribute("aria-pressed", "false"); });
+});
+
+function show(view, keepMsg){
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "v-" + view));
+  $("tabs").style.display = ["login","register"].includes(view) ? "" : "none";
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  $("helpLink").hidden = view === "help" || view === "account" || view === "change";
+  $("helpWho").hidden = $("helpIds").hidden = view === "help" && signedIn;
+  if (!keepMsg) setMsg("");
+  const first = $("v-" + view).querySelector("input:not([type=radio])"); if (first) setTimeout(() => first.focus(), 30);
+}
+function setMsg(text, ok){ const m = $("msg"); m.textContent = text; m.className = "msg" + (text ? (ok ? " ok" : " bad") : ""); }
+document.addEventListener("click", e => { const t = e.target.closest("[data-view],[data-go]"); if (t) show(t.dataset.view || t.dataset.go); });
+$("backToApp").addEventListener("click", () => location.href = "/");
+
+async function api(path, body){
+  const res = await fetch(path, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body), credentials:"same-origin" });
+  let data = {}; try { data = await res.json(); } catch {}
+  if (!res.ok){ const err = new Error(data.error || "Something went wrong. Please try again."); err.data = data; throw err; }
+  return data;
+}
+function bind(id, handler){
+  const f = $(id);
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(f));
+    for (const [k, v] of Object.entries(data)) if (!/password|confirm|current|next/i.test(k)) data[k] = String(v).trim();
+    const missing = [...f.querySelectorAll("input[required]")].find(i => !i.closest("[hidden]") && !i.value.trim());
+    if (missing){ setMsg("Please fill in all fields."); missing.focus(); return; }
+    const btn = f.querySelector("button[type=submit]"); btn.disabled = true;
+    try { await handler(data, f); } catch (err) { setMsg(err.message); if (err.after) err.after(); } finally { btn.disabled = false; }
+  });
+}
+
+/* register: three ways in */
+function setMode(){
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  $("fHousehold").hidden = mode === "invite"; $("fInvite").hidden = mode !== "invite";
+  $("hhHint").hidden = mode !== "create";
+  $("fHousehold").querySelector("input").placeholder = mode === "create" ? "e.g. ThePatels or flat-12b" : "The household’s exact name";
+  $("regBtn").textContent = mode === "create" ? "Create household" : mode === "invite" ? "Join household" : "Send request";
+}
+$("modes").addEventListener("change", setMode);
+async function checkInvite(code){
+  if (!code){ $("inviteHint").textContent = ""; return; }
+  try { const r = await fetch("/api/invite/" + encodeURIComponent(code)); const d = await r.json();
+    $("inviteHint").textContent = r.ok ? `You’re joining “${d.household}”.` : d.error; } catch {}
+}
+$("fInvite").querySelector("input").addEventListener("change", e => checkInvite(e.target.value.trim()));
+
+bind("v-register", async d => {
+  if (d.password !== d.confirm) throw new Error("Passwords don’t match.");
+  const r = await api("/api/register", { mode: d.mode, household: d.household, invite: d.invite, displayName: d.displayName,
+    username: d.username, email: d.email, password: d.password });
+  $("v-register").reset(); setMode();
+  if (r.next === "verify") goVerify(r.username, r.emailSent, r.message);
+  else { show("login", true); setMsg(r.message, true); }
+});
+function goVerify(username, emailSent, message){
+  pendingUser = username;
+  $("codeWrap").hidden = !emailSent && !emailEnabled;
+  $("verifySub").textContent = message || "Enter the 6-digit code we sent you.";
+  show("verify"); setMsg(emailSent ? "Account created — one last step." : "", true);
+}
+bind("v-verify", async (d, f) => {
+  const r = await api("/api/verify", { username: pendingUser, code: d.code });
+  f.reset(); show("login", true); setMsg(r.message, true);
+});
+$("resend").addEventListener("click", async () => {
+  try { const r = await api("/api/verify/resend", { username: pendingUser }); setMsg(r.message, true); } catch (err) { setMsg(err.message); }
+});
+
+/* log in */
+bind("v-login", async d => {
+  try {
+    const r = await api("/api/login", { username: d.username, password: d.password });
+    if (r.user.mustChange){ show("change"); $("changeSub").textContent = "Your password was reset. Choose a new one to continue."; $("changeBack").hidden = true; }
+    else location.href = next;
+  } catch (err) {
+    if (err.data && err.data.verify){ emailEnabled = err.data.emailEnabled; goVerify(err.data.username, false,
+      err.data.emailEnabled ? "Your email isn’t verified yet. Use the code we emailed you, or send a new one." : "Your account is waiting for the site admin to verify it."); return; }
+    throw err;
+  }
+});
+
+/* forgot / reset */
+bind("v-forgot", async (d, f) => {
+  const r = await api("/api/forgot", { username: d.username, note: d.note });
+  f.reset();
+  show("login", true); setMsg(r.message, true);
+});
+bind("v-reset", async (d, f) => {
+  if (d.password !== d.confirm) throw new Error("Passwords don’t match.");
+  const r = await api("/api/reset", { username: resetUser, code: resetToken || d.code, password: d.password });
+  history.replaceState(null, "", "/login.html");
+  f.reset(); show("login", true); setMsg(r.message, true);
+});
+
+/* contact the site admin */
+let helpFrom = "login", signedIn = false;
+bind("v-help", async (d, f) => {
+  const r = await api("/api/help", d);
+  f.reset();
+  if (signedIn){ show("account", true); } else show("login", true);
+  setMsg(r.message, true);
+});
+$("helpBack").addEventListener("click", () => show(signedIn ? "account" : "login"));
+
+/* account: add or change email */
+bind("v-account", async d => {
+  const r = await api("/api/account", { email: d.email });
+  setMsg(r.message, true); $("acctSub").textContent = acctText(r.user);
+});
+function acctText(u){ return `Signed in as ${u.displayName} (@${u.username}).` + (u.email ? "" : " You haven’t added an email yet — without one, a forgotten password has to be reset by your household admin."); }
+$("toChange").addEventListener("click", () => show("change"));
+$("acctBack").addEventListener("click", () => location.href = "/");
+
+/* change password (forced after a reset, or from the app) */
+bind("v-change", async (d, f) => {
+  if (d.next !== d.confirm) throw new Error("New passwords don’t match.");
+  await api("/api/change-password", { current: d.current, next: d.next });
+  f.reset(); setMsg("Password changed. Opening the app…", true);
+  setTimeout(() => location.href = next, 900);
+});
+
+(async () => {
+  try { const r = await fetch("/api/config"); if (r.ok){ emailEnabled = (await r.json()).emailEnabled; } } catch {}
+  $("forgotNote").hidden = emailEnabled;
+  $("forgotSub").textContent = emailEnabled ? "Enter your username or email and we’ll email you a link to reset your password."
+    : "Enter your username or email — your household admin will give you a temporary password.";
+  setMode();
+  const mode = params.get("mode"), invite = params.get("invite");
+  if (mode === "reset" && params.get("u") && params.get("t")){
+    resetUser = params.get("u"); resetToken = params.get("t");
+    $("resetSub").textContent = `Pick a new password for “${resetUser}”.`;
+    show("reset"); return;
+  }
+  if (invite){
+    document.querySelector('input[name="mode"][value="invite"]').checked = true; setMode();
+    $("fInvite").querySelector("input").value = invite.toUpperCase(); checkInvite(invite);
+    show("register"); return;
+  }
+  if (mode === "account"){
+    try {
+      const res = await fetch("/api/me", { credentials:"same-origin" });
+      if (!res.ok){ show("login"); return; }
+      const { user } = await res.json();
+      signedIn = true;
+      $("v-account").querySelector("input[name=email]").value = user.email || "";
+      $("acctSub").textContent = acctText(user); show("account");
+    } catch { show("login"); }
+    return;
+  }
+  if (mode === "change"){
+    try {
+      const res = await fetch("/api/me", { credentials:"same-origin" });
+      if (!res.ok){ show("login"); return; }
+      const { user } = await res.json();
+      show("change");
+      if (user.mustChange){ $("changeSub").textContent = "Your password was reset. Choose a new one to continue."; $("changeBack").hidden = true; }
+    } catch { show("login"); }
+  } else if (mode === "help"){
+    try { const res = await fetch("/api/me", { credentials:"same-origin" }); signedIn = res.ok; } catch {}
+    show("help");
+  } else show(["register","forgot"].includes(mode) ? mode : "login");
+})();
+})();
+</script>
+</body>
+</html>
