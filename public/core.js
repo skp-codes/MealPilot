@@ -46,6 +46,29 @@ export function typesAllowed(recipe, off) {
   return true;
 }
 // 52-bit string hash (library search shards, duplicate detection).
+// Recipe datasets scraped from web pages often carry HTML entities ("&quot;", "&ldquo;", "&#39;", sometimes double-encoded).
+const ENT = { quot: '"', amp: "&", apos: "'", lt: "<", gt: ">", nbsp: " ", ldquo: "“", rdquo: "”", lsquo: "‘", rsquo: "’", sbquo: "‚", bdquo: "„",
+  ndash: "–", mdash: "—", hellip: "…", deg: "°", frac12: "½", frac14: "¼", frac34: "¾", frac13: "⅓", frac23: "⅔", times: "×", divide: "÷",
+  reg: "®", trade: "™", copy: "©", eacute: "é", egrave: "è", ecirc: "ê", euml: "ë", aacute: "á", agrave: "à", acirc: "â", auml: "ä", atilde: "ã", aring: "å",
+  iacute: "í", igrave: "ì", icirc: "î", iuml: "ï", oacute: "ó", ograve: "ò", ocirc: "ô", ouml: "ö", otilde: "õ", oslash: "ø", uacute: "ú", ugrave: "ù", ucirc: "û", uuml: "ü",
+  ntilde: "ñ", ccedil: "ç", szlig: "ß", aelig: "æ", oelig: "œ", Eacute: "É", Aacute: "Á", Ntilde: "Ñ", Ccedil: "Ç", Uuml: "Ü", Ouml: "Ö", Auml: "Ä", bull: "•", middot: "·", yacute: "ý", yuml: "ÿ", iexcl: "¡", iquest: "¿", Oslash: "Ø", Aring: "Å", Egrave: "È", laquo: "«", raquo: "»", cent: "¢", pound: "£", euro: "€", frasl: "/", shy: "", zwj: "", zwnj: "", lrm: "", rlm: "" };
+export function decodeEntities(s) {
+  if (typeof s !== "string" || s.indexOf("&") < 0) return s;
+  for (let i = 0; i < 3 && /&(#\d+|#x[0-9a-f]+|[a-z]+\d*);/i.test(s); i++) {
+    s = s.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+\d*);/gi, (m, e) => {
+      if (e[0] === "#") { const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; }
+      return e in ENT ? ENT[e] : e.toLowerCase() in ENT ? ENT[e.toLowerCase()] : m;
+    });
+  }
+  return s.replace(/&amp(?![a-z#;])/gi, "&").replace(/\s{2,}/g, " ");
+}
+// Every string inside a parsed JSON value, decoded (used on library data).
+export function decodeDeep(v) {
+  if (typeof v === "string") return decodeEntities(v);
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) if (typeof v[i] === "string" ? v[i].indexOf("&") >= 0 : v[i] && typeof v[i] === "object") v[i] = decodeDeep(v[i]); return v; }
+  if (v && typeof v === "object") { for (const k in v) { const x = v[k]; if (typeof x === "string" ? x.indexOf("&") >= 0 : x && typeof x === "object") v[k] = decodeDeep(x); } return v; }
+  return v;
+}
 export function hash52(s) {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }

@@ -321,11 +321,11 @@ const MEAL_BITS = [["breakfast", 1], ["lunch", 2], ["dinner", 4], ["snack", 8], 
 const DIET_OF = ["vegan", "veg", "egg", "nonveg"], WITH_OF = ["", "rice", "roti"];
 async function cachedJSON(url, cacheName) {
   let cache = null;
-  try { cache = await caches.open(cacheName); const hit = await cache.match(url); if (hit) return hit.json(); } catch {}
+  try { cache = await caches.open(cacheName); const hit = await cache.match(url); if (hit) return C.decodeDeep(await hit.json()); } catch {}
   const res = await fetch(url, { credentials: "same-origin" });
   if (!res.ok) throw new Error("Couldn't load the recipe library (" + res.status + ").");
   if (cache) try { await cache.put(url, res.clone()); } catch {}
-  return res.json();
+  return C.decodeDeep(await res.json());
 }
 function expandRows(head, rows, from) {
   const out = [];

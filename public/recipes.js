@@ -110,7 +110,7 @@ ACT["search-all"] = () => {
   const go2 = async (append) => {
     st.busy = true; st.msg = ""; redraw();
     try {
-      const d = await api(`/api/lib/search?q=${encodeURIComponent(st.q)}&cu=${encodeURIComponent(st.cu)}&o=${append ? st.next : 0}`);
+      const d = C.decodeDeep(await api(`/api/lib/search?q=${encodeURIComponent(st.q)}&cu=${encodeURIComponent(st.cu)}&o=${append ? st.next : 0}`));
       st.items = append ? [...(st.items || []), ...d.items] : d.items; st.total = d.total; st.approx = d.approx; st.next = d.next; st.more = d.more;
     } catch (e) { st.msg = e.message; }
     st.busy = false; redraw();
@@ -139,7 +139,7 @@ ACT["search-all"] = () => {
 };
 async function previewArchive(k) {
   let d;
-  try { d = await api(`/api/lib/arc?k=${k}`); } catch (e) { toast(e.message, true); return; }
+  try { d = C.decodeDeep(await api(`/api/lib/arc?k=${k}`)); } catch (e) { toast(e.message, true); return; }
   const r = d.recipe;
   sheet((el) => {
     el.innerHTML = `<div class="sheet-head"><div><h2>${esc(r.t)}</h2><p class="sub">${[r.cu, r.T ? mins(r.T) : r.p != null && r.c != null ? mins(r.p + r.c) : "", r.v ? `serves ${r.v}` : ""].filter(Boolean).map(esc).join(" · ")}</p></div><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>

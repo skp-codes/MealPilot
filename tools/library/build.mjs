@@ -55,8 +55,9 @@ for (const kind of ["foodcom", "archana", "if101", "foodcom_raw", "recipenlg", "
   if (!found[kind]) continue;
   const w = kind === "if101" ? null : writer(tmp(kind + ".ndjson"));
   let n = 0, kept = 0;
-  for await (const r of READERS[kind](found[kind])) {
+  for await (const r0 of READERS[kind](found[kind])) {
     if (n++ >= LIMIT && !FULL.has(kind)) break;
+    const r = C.decodeDeep(r0);                                              // "&quot;", "&ldquo;"… → real characters
     if (n % 200000 === 0) log(`  ${kind}: ${n.toLocaleString()} read`);
     if (kind === "if101") { if101.set(normTitle(r.title), r); continue; }
     if (!r.title || !r.lines || r.lines.length < 2) continue;
