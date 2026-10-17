@@ -11,7 +11,7 @@ test("library builder: sample datasets → library + searchable archive", () => 
   execFileSync("node", ["tools/library/sample.mjs", path.join(dir, "in"), "10"]);
   execFileSync("node", ["tools/library/build.mjs", path.join(dir, "in"), path.join(dir, "out"), "--target", "800", "--post-shards", "16"]);
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "out", "meta.json"), "utf8"));
-  assert.ok(meta.library.count >= 700 && meta.library.count <= 800, "library size " + meta.library.count);
+  assert.ok(meta.library.count >= 600 && meta.library.count <= 800, "library size " + meta.library.count);
   assert.ok(Object.keys(meta.library.byCuisine).length >= 12, "spread across cuisines");
   assert.ok(meta.archive.count > 100);
   const head = JSON.parse(fs.readFileSync(path.join(dir, "out", "library", "head.json"), "utf8"));

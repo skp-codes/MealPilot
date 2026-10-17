@@ -357,6 +357,7 @@ export function parseIngredientLine(line, cat, opts = {}) {
   let m = matchIngredient(name, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(name.split(" ").slice(-2).join(" "), cat, { min: 0.62 });
   // "salt and pepper", "oil or butter": use the first thing named when the whole phrase isn't a clear match.
   if ((!m || m.score < 0.9) && /\s(and|or|&)\s/i.test(name)) { const first = matchIngredient(name.split(/\s(?:and|or|&)\s/i)[0], cat, { min: 0.6 }); if (first && (!m || first.score > m.score)) m = first; }
+  if (m && m.id === "pepper" && /\bpeppers\b/i.test(name) && cat.byId.has("bell_pepper")) m = { id: "bell_pepper", score: m.score };   // "2 peppers" = bell peppers
   const ing = m ? cat.byId.get(m.id) : null;
   const amount = ing ? toBase(q ?? defaultQty(ing), q == null ? defaultUnit(ing) : unit, ing) : 0;
   return { text: original, q, u: unit || (q == null ? null : "pc"), name: name || original, note, opt: optional,

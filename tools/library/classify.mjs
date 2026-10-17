@@ -31,7 +31,7 @@ const RULES = [
   ["Korean", /\bkorea|\bkimchi|\bbulgogi|\bbibimbap|\bgochujang|\bjapchae|\bgalbi/],
   ["Japanese", /\bjapan|\bteriyaki|\bsushi|\bmiso\b|\bramen|\budon|\bsoba\b|\btempura|\bkatsu|\byakitori|\btonkatsu|\bdonburi|\bokonomiyaki|\bgyoza|\bwasabi|\bedamame/],
   ["Chinese", /\bchinese|\bchina\b|\bszechuan|\bsichuan|\bcantonese|\bhunan|\bwonton|\bdim sum|\bchow mein|\blo mein|\bkung pao|\bsweet and sour|\begg foo|\bmapo|\bchar siu|\bhoisin|\bgeneral tso|\bmoo shu|\bfried rice|\bpotstickers|\bhot and sour/],
-  ["Middle Eastern", /\bmiddle east|\blebanes|\bturkish|\bpersian|\biranian|\bisrael|\barab\b|\barabic|\begypt|\bsyria|\bjordan|\biraq|\byemen|\bfalafel|\bhummus|\bshawarma|\btabbouleh|\btabouli|\bfattoush|\bbaba ganoush|\bkofta|\bkibbeh|\bshakshuka|\bza.?atar|\bbaklava|\bdolma/],
+  ["Middle Eastern", /\bmiddle east|\blebanes|\bturkish|\bpersian|\biranian|\bisrael|\barab\b|\barabic|\begypt|\bsyria|\bjordan|\biraq|\byemen|\bfalafel|\bhummus|\bshawarma|\btabbouleh|\btabouli|\bfattoush|\bbaba ganoush|\bkibbeh|\bshakshuka|\bza.?atar|\bbaklava|\bdolma/],
   ["African", /\bafrican|\bmoroc|\bethiopi|\bnigeria|\bghana|\bkenya|\btunisia|\balgeria|\bsenegal|\btagine|\btajine|\bjollof|\binjera|\bbobotie|\bharissa|\bpiri piri|\bperi peri|\bberbere|\bbiltong|\bbobotie/],
   ["Mediterranean", /\bgreek|\bgreece|\bmediterranean|\bcyprus|\bcretan|\btzatziki|\bsouvlaki|\bmoussaka|\bspanakopita|\bgyros?\b|\bfeta\b.*\bsalad|\bkalamata|\bdolmades/],
   ["Caribbean", /\bcaribbean|\bjamaica|\bjerk\b|\bcuba|\bpuerto ric|\bdominican|\btrinidad|\bhaiti|\bbahama|\bbarbados|\bwest indian|\bcallaloo|\bjamaican/],
@@ -45,7 +45,7 @@ const RULES = [
   ["Italian", /\bitalian|\bitaly|\bpasta\b|\brisotto|\blasagn|\bgnocchi|\bpesto|\bparmigiana|\bbruschetta|\bcarbonara|\bmarinara|\balfredo|\bravioli|\btortellini|\bpizza|\bcalzone|\bfocaccia|\bminestrone|\btiramisu|\bbiscotti|\bcacciatore|\bpiccata|\bosso buco|\bpolenta|\bpanzanella|\barancini|\bfrittata|\bcaprese|\bbolognese|\bspaghetti|\bfettuccin|\blinguine|\bpenne|\bziti|\bmanicotti|\bpanna cotta|\bsaltimbocca|\bstromboli|\borzo/],
   ["British", /\bbritish|\benglish|\bscottish|\bscotland|\birish|\bireland|\bwelsh|\bwales|\bshepherd.?s pie|\bcottage pie|\byorkshire|\btoad in the hole|\bbangers|\bbubble and squeak|\bscones?\b|\bcrumpets?|\btrifle|\bsticky toffee|\bcornish|\bpasty|\bbread and butter pudding|\bfish and chips|\bhaggis|\bcolcannon|\bsoda bread|\bploughman|\beton mess|\bvictoria sponge|\baustralian|\bnew zealand|\banzac|\bpavlova|\blamingtons?|\bbanoffee|\bcrumble\b|\bspotted dick|\bcock-a-leekie|\bwelsh rarebit|\bbeef wellington/],
   ["American", /\bamerican|\bsouthern\b|\bcajun|\bcreole|\bsoul food|\bhawaiian|\bcanadian|\bnew england|\bbbq\b|\bbarbecue|\bcasserole|\bmeatloaf|\bmac and cheese|\bmac n cheese|\bcornbread|\bbrownies?|\bcheeseburger|\bsloppy joe|\bbuffalo|\bclam chowder|\bjambalaya|\bgumbo|\bpot roast|\bbiscuits and gravy|\bcobbler|\bpecan pie|\bs.?mores|\bcheesesteak|\bpulled pork|\bcoleslaw|\bpancakes?/],
-  ["North Indian", /\bindian\b|\bindia\b|\bpunjab|\bmughlai|\bkashmir|\blucknow|\bawadh|\bdelhi|\bhimachal|\bcurry|\bmasala|\btikka|\btandoor|\bpaneer|\bdal\b|\bdaal\b|\bdhal\b|\bbiryani|\bkorma|\bchana\b|\bchole|\baloo\b|\bgobi\b|\bbhaji|\bpakora|\bsamosa|\bnaan\b|\bchapati|\broti\b|\bparatha|\braita|\bkheer|\bhalwa|\bladoo|\bladdu|\bchutney|\bsabzi|\bsabji|\bkofta curry|\bkeema|\brajma|\bpulao|\bpilau|\bdum\b|\bvindaloo|\bbhuna|\bbalti|\bmadras|\bjalfrezi|\brogan josh|\bsaag|\bpalak|\bmethi|\bgulab jamun|\bjalebi|\bkulfi|\blassi|\bchaat|\bbhel|\bpani puri/],
+  ["North Indian", /\bindian\b|\bindia\b|\bpunjab|\bmughlai|\bkashmir|\blucknow|\bawadh|\bdelhi|\bhimachal|\bcurry|\bmasala|\btikka|\btandoor|\bpaneer|\bdal\b|\bdaal\b|\bdhal\b|\bbiryani|\bkorma|\bchana\b|\bchole\b|\bchholey?\b|\baloo\b|\bgobi\b|\bbhaji|\bpakora|\bsamosa|\bnaan\b|\bchapati|\broti\b|\bparatha|\braita|\bkheer|\bhalwa|\bladoo|\bladdu|\bchutney|\bsabzi|\bsabji|\bkofta curry|\bkeema|\brajma|\bpulao|\bpilau|\bdum\b|\bvindaloo|\bbhuna|\bbalti|\bmadras|\bjalfrezi|\brogan josh|\bsaag|\bpalak|\bmethi|\bgulab jamun|\bjalebi|\bkulfi|\blassi|\bchaat|\bbhel\b|\bpani puri/],
 ];
 const ALL_INDIAN = new Set(["South Indian", "North Indian", "West Indian", "East Indian", "Indo-Chinese", "Pakistani", "Sri Lankan"]);
 export function cuisineOf(r, if101) {
@@ -140,24 +140,22 @@ export function sideOf(r, cuisine, meals) {
 /* ---------- Food.com quantities have no units: recover them ---------- */
 // From a matching RecipeNLG / Recipe1M copy of the same Food.com page when there is one, else a sensible guess.
 export function linesWithUnits(r, alt, cat) {
+  // The Kaggle file's quantities have no units and are often out of step with the ingredient names,
+  // so the full-text copy of the same page (from RecipeNLG / Recipe1M) is used whenever there is one.
+  if (alt && alt.length >= 2) return { lines: alt.map((l) => Object.assign(C.parseIngredientLine(l, cat) || { name: l, id: null }, { text: l })), guessed: 0, fromAlt: true };
+  if (r.parts.length !== r.qtys.length) return null;                           // can't trust the pairing
   const out = []; let guessed = 0;
-  const altParsed = alt ? alt.map((l) => ({ l, p: C.parseIngredientLine(l, cat) })).filter((x) => x.p) : [];
-  r.parts.forEach((part, i) => {
-    const q = r.qtys[i];
+  for (let i = 0; i < r.parts.length; i++) {
+    const part = r.parts[i], q = r.qtys[i];
     const qn = C.parseLeadingQty(String(q || "")).q;
     const base = C.parseIngredientLine(part, cat) || { name: part, id: null };
-    // 1. the same ingredient in the full-text copy
-    const hit = altParsed.find((x) => x.p.id && x.p.id === base.id) || altParsed.find((x) => C.norm(x.l).includes(C.norm(part)));
-    if (hit && hit.p.q != null) { out.push(Object.assign({}, hit.p, { text: hit.l })); return; }
-    if (qn == null) { out.push(Object.assign({}, base, { q: null, text: part })); return; }
-    // 2. a guess from the kind of ingredient
+    if (qn == null) { out.push(Object.assign({}, base, { q: null, text: part })); continue; }
     const ing = base.id && cat.byId.get(base.id);
     let u = ing ? guessUnit(ing, qn, part) : "pc";
-    // Implausible as cups/pounds/spoons (e.g. "200 flour") — it was grams or millilitres.
     if (ing && qn > 12 && ["cup", "lb", "tbsp", "tsp", "oz"].includes(u)) u = ing.unit === "ml" ? "ml" : ing.unit === "pc" ? "pc" : "g";
     guessed++;
     out.push(Object.assign({}, base, { q: qn, u, amount: ing ? Math.round(C.toBase(qn, u, ing) * 100) / 100 : 0, text: `${q} ${u === "pc" ? "" : u + " "}${part}`.replace(/\s+/g, " ").trim(), guessed: true }));
-  });
+  }
   return { lines: out, guessed };
 }
 function guessUnit(ing, q, part) {

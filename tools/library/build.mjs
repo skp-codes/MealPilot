@@ -24,6 +24,8 @@ const IN = args[0], OUT = args[1];
 if (!IN || !OUT) { console.error("Usage: node tools/library/build.mjs <downloads folder> <output folder> [--target 50000] [--limit N]"); process.exit(1); }
 const TARGET = Number(flag("--target", 50000));
 const LIMIT = Number(flag("--limit", 0)) || Infinity;          // per source, for trial runs
+const FULL = new Set(String(flag("--full", "")).split(",").filter(Boolean));   // sources read in full even with --limit
+const NO_ARCHIVE = args.includes("--no-archive");
 const LIB_SHARD = 250, ARC_SHARD = 250, POST_SHARDS = Number(flag("--post-shards", 4096)), POST_CAP = 20000, BUCKET = 25000;
 // How the default library is shared out. Cuisines that don't have enough good recipes pass their share on.
 const QUOTA = {
@@ -54,7 +56,7 @@ for (const kind of ["foodcom", "archana", "if101", "foodcom_raw", "recipenlg", "
   const w = kind === "if101" ? null : writer(tmp(kind + ".ndjson"));
   let n = 0, kept = 0;
   for await (const r of READERS[kind](found[kind])) {
-    if (n++ >= LIMIT) break;
+    if (n++ >= LIMIT && !FULL.has(kind)) break;
     if (n % 200000 === 0) log(`  ${kind}: ${n.toLocaleString()} read`);
     if (kind === "if101") { if101.set(normTitle(r.title), r); continue; }
     if (!r.title || !r.lines || r.lines.length < 2) continue;
@@ -63,6 +65,7 @@ for (const kind of ["foodcom", "archana", "if101", "foodcom_raw", "recipenlg", "
       const id = foodcomId(r.url);
       if (id && fcIds.has(id) && !altLines.has(id)) altLines.set(id, r.lines.join("\u0001"));
     }
+    if (FULL.has(kind) && n > LIMIT && NO_ARCHIVE) continue;           // only needed for unit recovery
     w.write(r); kept++;
   }
   if (w) await w.close();
@@ -73,7 +76,7 @@ for (const kind of ["foodcom", "archana", "if101", "foodcom_raw", "recipenlg", "
 /* ---------- 2. the default library: complete recipes only ---------- */
 const candW = writer(tmp("cands.ndjson"));
 const cands = [];                                                           // small summaries, full records stay on disk
-let rejected = { incomplete: 0, unmatched: 0, meals: 0, other: 0 };
+let rejected = { incomplete: 0, units: 0, unmatched: 0, meals: 0, implausible: 0, other: 0 };
 for (const kind of ["foodcom", "archana"]) {
   if (!fs.existsSync(tmp(kind + ".ndjson"))) continue;
   let n = 0;
@@ -97,13 +100,24 @@ function candidate(r) {
   const servings = r.servings && r.servings >= 1 && r.servings <= 24 ? Math.round(r.servings) : null;
   if (prep == null || cook == null || prep + cook <= 0 || prep + cook > 600 || !servings || steps.length < 2 || r.lines.length < 3 || r.lines.length > 35) { rejected.incomplete++; return null; }
   let lines, guessed = 0;
-  if (r.src === "fc") { const alt = altLines.get(r.sid); ({ lines, guessed } = linesWithUnits(r, alt ? alt.split("\u0001") : null, cat)); }
+  if (r.src === "fc") {
+    const alt = altLines.get(r.sid), got = linesWithUnits(r, alt ? alt.split("\u0001") : null, cat);
+    if (!got || (!got.fromAlt && got.guessed > 2)) { rejected.units++; return null; }        // too much guessing: archive only
+    ({ lines, guessed } = got);
+  }
   else lines = r.lines.map((l) => Object.assign(C.parseIngredientLine(l, cat) || { name: l, id: null }, { text: l }));
   const real = lines.filter((x) => !(x.id && cat.byId.get(x.id)?.free));
   const ok = real.filter((x) => x.id && x.amount > 0);
   if (!real.length || ok.length / real.length < 0.85) { rejected.unmatched++; return null; }
   const meals = mealsOf(r);
   if (!meals) { rejected.meals++; return null; }
+  // Sanity check: calories per serving worked out from the ingredients vs. what the source published.
+  {
+    let kcal = 0;
+    for (const x of ok) { const ing = cat.byId.get(x.id); if (ing && ing.nut) kcal += (ing.nut.kcal * C.gramsOf(x.amount * (x.absorb || 1), ing)) / 100; }
+    const per = kcal / servings, src = r.nu && r.nu[0];
+    if (per > 2500 || per < 25 || (src && src > 40 && (per / src > 2.6 || per / src < 0.35))) { rejected.implausible++; return null; }
+  }
   const cuisine = cuisineOf(r, if101);
   if (!cuisine) { rejected.other++; return null; }
   const textTypes = typesFromText(r.lines);
@@ -201,6 +215,7 @@ const libKeys = new Set(sel.map((r) => r.id));
 log("Library by cuisine:", JSON.stringify(libStats));
 
 /* ---------- 3. the archive: everything else, de-duplicated ---------- */
+if (NO_ARCHIVE) { log("Skipping the archive (--no-archive)."); fs.writeFileSync(path.join(OUT, "meta.json"), JSON.stringify({ version: "test", library: { count: rows.length, byCuisine: libStats }, archive: { count: 0 } }, null, 1)); process.exit(0); }
 const sources = ["foodcom", "archana", "foodcom_raw", "recipenlg", "recipe1m"].filter((k) => fs.existsSync(tmp(k + ".ndjson")));
 const best = new Map();                     // dedupe hash → record number of the best copy
 let scores = new Float32Array(1 << 20), recNo = 0;

@@ -32,8 +32,8 @@ for (let c = 0; c < COPIES; c++) for (const r of recs) {
   rows.push([id, q(name), 1, q("Tester"), `PT${r.cook}M`, `PT${r.prep}M`, `PT${r.prep + r.cook}M`, "2005-01-01T00:00:00Z", q(`A ${r.cuisine} favourite.`), q(rv([`https://img.example.com/${id}.jpg`])),
     q(category), q(rv([KW[r.cuisine] || r.cuisine, "< 60 Mins"])), q(rv(qtys)), q(rv(parts)), (3.5 + (id % 15) / 10).toFixed(1), 1 + (id % 40), f.per.kcal, f.per.fat, 1, 1, 1, f.per.carbs, f.per.fibre, 1, f.per.protein, r.servings, q(`${r.servings} servings`), q(rv(r.steps))].join(","));
   // a full-text copy of every third one in RecipeNLG and Recipe1M (with the units), pointing back to Food.com
-  if (id % 3 === 0) nlRows.push([nlRows.length, q(name), q(JSON.stringify(lines)), q(JSON.stringify(r.steps)), q(`www.food.com/recipe/${C.norm(name).replace(/ /g, "-")}-${id}`), "Gathered", q(JSON.stringify(parts))].join(","));
-  if (id % 3 === 1) rmRecs.push({ id: "rm" + id, title: name, ingredients: lines.map((text) => ({ text })), instructions: r.steps.map((text) => ({ text })), partition: "train", url: `http://www.food.com/recipe/${C.norm(name).replace(/ /g, "-")}-${id}` });
+  if (id % 2 === 0) nlRows.push([nlRows.length, q(name), q(JSON.stringify(lines)), q(JSON.stringify(r.steps)), q(`www.food.com/recipe/${C.norm(name).replace(/ /g, "-")}-${id}`), "Gathered", q(JSON.stringify(parts))].join(","));
+  if (id % 2 === 1) rmRecs.push({ id: "rm" + id, title: name, ingredients: lines.map((text) => ({ text })), instructions: r.steps.map((text) => ({ text })), partition: "train", url: `http://www.food.com/recipe/${C.norm(name).replace(/ /g, "-")}-${id}` });
   if (id % 4 === 0) rawRows.push([q(name.toLowerCase()), id, r.prep + r.cook, 1, "2005-01-01", q(JSON.stringify([C.norm(r.cuisine)]).replace(/"/g, "'")), q("[1,1,1,1,1,1,1]"), r.steps.length, q(JSON.stringify(r.steps).replace(/"/g, "'")), q(""), q(JSON.stringify(parts).replace(/"/g, "'")), parts.length].join(","));
 }
 fs.writeFileSync(path.join(OUT, "recipes.csv"), fcHead + "\n" + rows.join("\n") + "\n");
