@@ -5,10 +5,83 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import zlib from "node:zlib";
+import { Readable } from "node:stream";
+
+/* ---------- inputs: plain files, or files inside .zip archives (read directly, no unzipping) ---------- */
+// A source is { file, entry?, name }. Zip entries are streamed straight out of the archive.
+function readAt(fd, pos, len) { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); }
+export function zipEntries(file) {
+  const fd = fs.openSync(file, "r");
+  try {
+    const size = fs.fstatSync(fd).size, tailLen = Math.min(size, 65557), tail = readAt(fd, size - tailLen, tailLen);
+    let eocd = -1;
+    for (let i = tail.length - 22; i >= 0; i--) if (tail.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error(`${path.basename(file)} isn't a readable zip file`);
+    let count = tail.readUInt16LE(eocd + 10), cdSize = tail.readUInt32LE(eocd + 12), cdOff = tail.readUInt32LE(eocd + 16);
+    if (cdOff === 0xffffffff || count === 0xffff) {                      // zip64
+      const loc = eocd - 20;
+      if (loc >= 0 && tail.readUInt32LE(loc) === 0x07064b50) {
+        const z64 = Number(tail.readBigUInt64LE(loc + 8)), rec = readAt(fd, z64, 56);
+        count = Number(rec.readBigUInt64LE(32)); cdSize = Number(rec.readBigUInt64LE(40)); cdOff = Number(rec.readBigUInt64LE(48));
+      }
+    }
+    const cd = readAt(fd, cdOff, cdSize), out = [];
+    for (let p = 0, k = 0; k < count && p + 46 <= cd.length; k++) {
+      if (cd.readUInt32LE(p) !== 0x02014b50) break;
+      const method = cd.readUInt16LE(p + 10), nameLen = cd.readUInt16LE(p + 28), extraLen = cd.readUInt16LE(p + 30), commentLen = cd.readUInt16LE(p + 32);
+      let csize = cd.readUInt32LE(p + 20), usize = cd.readUInt32LE(p + 24), off = cd.readUInt32LE(p + 42);
+      const name = cd.toString("utf8", p + 46, p + 46 + nameLen);
+      const extra = cd.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
+      for (let e = 0; e + 4 <= extra.length;) {                            // zip64 sizes/offset
+        const id = extra.readUInt16LE(e), len = extra.readUInt16LE(e + 2);
+        if (id === 1) { let q = e + 4; if (usize === 0xffffffff) { usize = Number(extra.readBigUInt64LE(q)); q += 8; } if (csize === 0xffffffff) { csize = Number(extra.readBigUInt64LE(q)); q += 8; } if (off === 0xffffffff) off = Number(extra.readBigUInt64LE(q)); }
+        e += 4 + len;
+      }
+      if (!name.endsWith("/")) out.push({ name, method, csize, usize, off });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return out;
+  } finally { fs.closeSync(fd); }
+}
+function entryStream(file, e) {
+  const fd = fs.openSync(file, "r");
+  const lh = readAt(fd, e.off, 30); fs.closeSync(fd);
+  if (lh.readUInt32LE(0) !== 0x04034b50) throw new Error("Damaged zip entry " + e.name);
+  const start = e.off + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28);
+  const raw = fs.createReadStream(file, { start, end: e.csize ? start + e.csize - 1 : undefined, highWaterMark: 1 << 20 });
+  if (e.method === 0) return raw;
+  if (e.method !== 8) throw new Error(`${e.name}: unsupported compression in the zip — please unzip it first`);
+  return raw.pipe(zlib.createInflateRaw({ chunkSize: 1 << 20 }));
+}
+export function openText(src) {
+  const s = typeof src === "string" ? fs.createReadStream(src, { highWaterMark: 1 << 20 }) : src.entry ? entryStream(src.file, src.entry) : fs.createReadStream(src.file, { highWaterMark: 1 << 20 });
+  s.setEncoding("utf8");
+  return s;
+}
+export async function headText(src, n = 4000) {
+  const s = openText(src); let out = "";
+  for await (const c of s) { out += c; if (out.length >= n) break; }
+  s.destroy();
+  return out.slice(0, n);
+}
+export function listSources(dir) {
+  const out = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(csv|json)$/i.test(e.name)) out.push({ file: p, name: path.relative(dir, p) });
+      else if (/\.zip$/i.test(e.name)) { try { for (const en of zipEntries(p)) if (/\.(csv|json)$/i.test(en.name)) out.push({ file: p, entry: en, name: `${path.relative(dir, p)} → ${en.name}` }); } catch (err) { console.log("  (skipping " + e.name + ": " + err.message + ")"); } }
+    }
+  };
+  walk(dir);
+  return out;
+}
 
 /* ---------- CSV (RFC 4180: quotes, commas and newlines inside fields) ---------- */
 export async function* csvRows(file) {
-  const stream = fs.createReadStream(file, { encoding: "utf8", highWaterMark: 1 << 20 });
+  const stream = openText(file);
   let field = "", row = [], inQ = false, pendingQuote = false, first = true;
   for await (let chunk of stream) {
     if (first) { chunk = chunk.replace(/^﻿/, ""); first = false; }
@@ -37,7 +110,11 @@ export async function* csvRows(file) {
   if (field || row.length) { row.push(field); yield row; }
 }
 export async function csvHeader(file) {
-  for await (const row of csvRows(file)) return row.map((h) => h.trim());
+  const head = (await headText(file, 4000)).replace(/^\uFEFF/, "");
+  const rows = []; let field = "", row = [], inQ = false;
+  for (let i = 0; i < head.length; i++) { const c = head[i];
+    if (inQ) { if (c === '"') { if (head[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; continue; }
+    if (c === '"') inQ = true; else if (c === ",") { row.push(field); field = ""; } else if (c === "\n") { row.push(field.replace(/\r$/, "")); return row.map((h) => h.trim()); } else field += c; }
   return [];
 }
 async function* csvObjects(file) {
@@ -52,7 +129,7 @@ async function* csvObjects(file) {
 
 /* ---------- JSON array streamed object by object (Recipe1M layer1.json is ~1.3 GB) ---------- */
 export async function* jsonArrayObjects(file) {
-  const stream = fs.createReadStream(file, { encoding: "utf8", highWaterMark: 1 << 20 });
+  const stream = openText(file);
   let depth = 0, inStr = false, esc = false, buf = "", collecting = false;
   for await (const chunk of stream) {
     let start = collecting ? 0 : -1;
@@ -117,21 +194,21 @@ const foodcomId = (url) => { const m = String(url || "").match(/food\.com\/recip
 export { foodcomId };
 
 /* ---------- detect which dataset a file is ---------- */
-export async function detect(file) {
-  const ext = path.extname(file).toLowerCase(), base = path.basename(file).toLowerCase();
+export async function detect(src) {
+  const nm = typeof src === "string" ? src : (src.entry ? src.entry.name : src.file);
+  const ext = path.extname(nm).toLowerCase();
   if (ext === ".json") {
-    const fd = fs.openSync(file, "r"); const b = Buffer.alloc(4000); fs.readSync(fd, b, 0, 4000, 0); fs.closeSync(fd);
-    const head = b.toString("utf8");
+    const head = await headText(src, 4000);
     if (/^\s*\[/.test(head) && /"ingredients"/.test(head) && /"instructions"/.test(head)) return "recipe1m";
     return null;
   }
   if (ext !== ".csv") return null;
-  const h = new Set(await csvHeader(file));
+  const h = new Set(await csvHeader(src));
   if (h.has("RecipeIngredientParts") && h.has("RecipeInstructions")) return "foodcom";
   if (h.has("minutes") && h.has("steps") && h.has("ingredients") && h.has("n_steps")) return "foodcom_raw";
   if (h.has("TranslatedRecipeName") || (h.has("RecipeName") && h.has("PrepTimeInMins"))) return "archana";
   if (h.has("flavor_profile") && h.has("region")) return "if101";
-  if (h.has("title") && h.has("directions") && h.has("NER")) return "recipenlg";
+  if (h.has("title") && h.has("directions") && (h.has("NER") || h.has("link"))) return "recipenlg";
   return null;
 }
 

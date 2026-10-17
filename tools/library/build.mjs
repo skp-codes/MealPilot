@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as C from "../../public/core.js";
 import { INGREDIENTS, AISLE_ORDER } from "../../public/data/ingredients.js";
-import { detect, READERS, ndjson, writer, foodcomId } from "./readers.mjs";
+import { detect, READERS, ndjson, writer, foodcomId, listSources } from "./readers.mjs";
 import { cuisineOf, mealsOf, typesFromText, dietOfText, spiceOf, sideOf, linesWithUnits, normTitle, dedupeKey, hash52, titleTokens } from "./classify.mjs";
 
 /* ---------- settings ---------- */
@@ -43,10 +43,9 @@ for (const d of ["tmp", "library", "archive"]) fs.mkdirSync(path.join(OUT, d), {
 const tmp = (f) => path.join(OUT, "tmp", f);
 
 /* ---------- 1. find and read the datasets ---------- */
-function walk(dir) { const out = []; for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) out.push(...walk(p)); else out.push(p); } return out; }
 const found = {};
-for (const f of walk(IN)) { const kind = await detect(f).catch(() => null); if (kind && !found[kind]) found[kind] = f; }
-log("Found:", Object.entries(found).map(([k, f]) => `${k} = ${path.relative(IN, f)}`).join("; ") || "nothing");
+for (const src of listSources(IN)) { const kind = await detect(src).catch(() => null); if (kind && !found[kind]) found[kind] = src; }
+log("Found:\n  " + (Object.entries(found).map(([k, f]) => `${k.padEnd(12)} ${f.name}`).join("\n  ") || "nothing"));
 if (!Object.keys(found).length) { console.error("No recognised dataset files. See tools/library/README.md."); process.exit(1); }
 
 const counts = {}, fcIds = new Set(), altLines = new Map(), if101 = new Map();
