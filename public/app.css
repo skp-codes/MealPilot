@@ -183,6 +183,7 @@ td{padding:8px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 .dish-name{background:none;border:0;padding:0;text-align:left;cursor:pointer;font:700 1rem/1.3 var(--body);color:var(--ink);display:inline-flex;gap:7px;align-items:baseline}
 .dish-name:hover{color:var(--accent)}
 .dish-meta{font-size:.8rem;color:var(--muted);margin-top:1px}
+.dish-meta.have .ok{color:var(--leaf);font-weight:600}
 .sides{font-size:.84rem;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
 .sides button{border:0;background:none;padding:0;color:var(--muted);cursor:pointer;font-size:.84rem}
 .alts{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;align-items:center}

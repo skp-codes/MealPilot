@@ -17,7 +17,7 @@ function defaults() {
   const diners = S.doc.diners.map((d) => d.id);
   return { start: C.nextWeekday(C.isoDate(), s.weekStart ?? 1, false) === C.isoDate() ? C.isoDate() : C.nextWeekday(C.isoDate(), s.weekStart ?? 1, true),
     days: 7, meals: (s.meals && s.meals.length ? s.meals : ["breakfast", "lunch", "dinner"]).slice(), diners, people: null, cuisines: [], diet: s.diet === "vegan" ? "vegan" : "any", off: fromDiet(s.diet).off,
-    goals: [], avoid: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, alts: s.alts ?? 2, sides: s.sides !== false, leftovers: !!s.leftovers, seed: 1 };
+    goals: [], avoid: [], have: [], haveGroups: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, alts: s.alts ?? 2, sides: s.sides !== false, leftovers: !!s.leftovers, seed: 1 };
 }
 function ensureP() { if (!P) P = defaults(); if (!Array.isArray(P.off)) { const d = fromDiet(P.diet); P.off = d.off; P.diet = d.vegan ? "vegan" : "any"; } if (!P.start || P.start < C.isoDate()) P.start = C.isoDate(); return P; }
 function selectedDiners() { const ids = new Set(P.diners || []); return S.doc.diners.filter((d) => ids.has(d.id)); }
@@ -58,6 +58,7 @@ function examples() {
     `Plan dinners for a family of four next week, Indian and Italian, no more than 30 minutes of cooking per day, ${cur}${inr ? "3000" : "60"} budget`,
     "South Indian breakfast, lunch and dinner for 3 people for 5 days, vegetarian",
     "Protein-rich meals for my 11-year-old this week, mild, no mushrooms",
+    "Something Italian for 3 tonight, the ingredients I have are chicken, tomatoes and onion",
   ];
 }
 const chk = (on) => (on ? "checked" : "");
@@ -89,6 +90,7 @@ function settingsForm() {
       <label class="f">Total time per meal${timeSel("maxTotal", [15, 20, 30, 40, 45, 60, 90])}</label>
       <label class="f">Kitchen time per day${timeSel("maxDay", [30, 45, 60, 90, 120, 180])}</label>
     </div>
+    <label class="f" style="margin-top:12px">Ingredients I have<input data-on="phave" placeholder="e.g. chicken, tomatoes, onion" value="${esc((p.haveGroups || []).map((g) => g.w).join(", "))}"><span class="hint">Recipes that use these come first, and they're left off the shopping list.</span></label>
     <label class="f" style="margin-top:12px">Leave out<input data-on="pavoid" placeholder="e.g. mushrooms, beef, peanuts" value="${esc(avoidNames.join(", "))}"><span class="hint">Separate with commas. ${eff.avoid.length > p.avoid.length ? `People's profiles also leave out: ${eff.avoid.filter((a) => !p.avoid.includes(a)).map((id) => (ingredient(id) ? ingredient(id).name : id)).join(", ")}.` : ""}</span></label>
     <div class="row" style="margin-top:12px;gap:18px">
       <label class="row" style="gap:8px"><input type="checkbox" data-on="pset" data-k="sides" ${chk(p.sides)}> Add rice, roti or a side where a dish needs one</label>
@@ -115,6 +117,11 @@ ON["pavoid"] = (el) => {
   for (const w of el.value.split(",").map((x) => x.trim()).filter(Boolean)) { const m = C.matchIngredient(w, S.cat, { min: 0.6 }); if (m) ids.push(m.id); }
   P.avoid = [...new Set(ids)]; saveState();
 };
+ON["phave"] = (el) => {
+  const { groups, unknown } = C.haveGroups(el.value, S.cat);
+  P.haveGroups = groups; P.have = [...new Set(groups.flatMap((g) => g.ids))]; saveState();
+  if (unknown.length) toast(`Didn't recognise: ${unknown.join(", ")}`, true);
+};
 ACT["people-auto"] = () => { P.people = null; saveState(); go("plan"); };
 let rr; function rerenderPlanSoon() { clearTimeout(rr); rr = setTimeout(() => { if (S.tab === "plan") go("plan"); }, 10); }
 
@@ -130,6 +137,7 @@ ACT["plan-understand"] = () => {
   if (req.budget) P.budget = req.budget; else if (req.budgetPerDay) P.budget = req.budgetPerDay * (P.days || 7);
   if (req.goals) P.goals = req.goals;
   if (req.avoid) P.avoid = req.avoid;
+  if (req.have) { P.have = req.have; P.haveGroups = req.haveGroups; }
   { // "vegetarian", "no beef", "no seafood"… become ticks in the foods list
     const d = fromDiet(req.diet || S.doc.settings.diet);
     P.diet = d.vegan ? "vegan" : "any";
@@ -276,6 +284,10 @@ export function boardHTML(m, { mode = "edit", canSuggest = false, suggestions = 
         out += `<button class="dish-name" data-act="plan-open" data-id="${esc(r.id)}" data-s="${main.s}">${dietDot(r.diet)} ${esc(r.name)}</button>`;
         out += s.leftover ? `<div class="dish-meta">Leftovers from ${C.dayLabel(C.addDays(m.start, s.leftover.d))} ${C.MEAL_LABEL[s.leftover.m].toLowerCase()}${mode === "edit" ? ` · <button class="link" data-act="slot-cookfresh" data-key="${key}">Cook something else</button>` : ""}</div>`
           : `<div class="dish-meta">${esc(r.cuisine)} · ${mins(r.total)} · ${money(f.cost)} · ${Math.round(f.per.protein)} g protein each · for ${C.fmtNum(main.s)}</div>`;
+        if (!s.leftover && m.req && m.req.have && m.req.have.length) {
+          const sp = C.haveSplit(r, m.req.have, S.cat);
+          out += `<div class="dish-meta have">${sp.uses.length ? `<span class="ok">✓ Uses your ${esc(sp.uses.join(", ").toLowerCase())}</span>` : `<span>Doesn't use what you have</span>`}${sp.need.length ? ` · also needs ${esc(sp.need.slice(0, 6).join(", ").toLowerCase())}${sp.need.length > 6 ? "…" : ""}` : " · nothing else to buy apart from basics"}</div>`;
+        }
         if (sides.length) out += `<div class="sides">${sides.map((x) => { const sr = recipe(x.r); return sr ? `<span>+ ${esc(sr.name)}${mode === "edit" ? ` <button data-act="slot-unside" data-key="${key}" data-r="${esc(x.r)}" aria-label="Remove ${esc(sr.name)}">×</button>` : ""}</span>` : ""; }).join("")}</div>`;
         if (mode === "edit" && !s.leftover && (s.alts || []).length) out += `<div class="alts"><span class="lbl">Or:</span>${s.alts.map((a) => { const ar = recipe(a); return ar ? `<button class="alt" data-act="slot-alt" data-key="${key}" data-r="${esc(a)}" title="Swap to ${esc(ar.name)}">${esc(ar.name)}</button>` : ""; }).join("")}</div>`;
       }

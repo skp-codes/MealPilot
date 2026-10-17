@@ -526,12 +526,50 @@ const AVOID_GROUPS = {
   mushroom: ["mushroom"], cheese: ["cheddar", "mozzarella", "parmesan", "feta", "halloumi"], paneer: ["paneer"], coconut: ["coconut", "coconut_milk", "desiccated_coconut", "coconut_oil"],
 };
 
+// "chicken, tomatoes and onion" → one group per word, each with every catalogue ingredient it can mean
+// (chicken → breast, thighs, wings, cooked chicken; tomatoes → fresh, cherry, tinned).
+const singular = (w) => w.replace(/ies$/, "y").replace(/(oes|shes|ches|ses)$/, (m) => m.slice(0, -2)).replace(/s$/, "");
+export function haveGroups(text, cat) {
+  const groups = [], unknown = [];
+  if (!cat) return { groups, unknown };
+  const words = String(text || "").toLowerCase().split(/,|;|\/|\band\b|&|\bplus\b|\bwith\b|\+/)
+    .map((w) => w.replace(/\b(some|a few|few|a bit of|bit of|a little|little|a|an|the|half a|half|leftover|left over|fresh|frozen|of|my|our|bag of|pack of|tin of|can of|bunch of)\b/g, " ")
+      .replace(/\d+(\.\d+)?\s*(kg|g|grams?|ml|l|litres?|liters?|lbs?|pounds?|oz|packs?|tins?|cans?|cups?|pieces?|pcs?)?\b/g, " ").replace(/[^a-z' -]/g, " ").replace(/\s+/g, " ").trim())
+    .filter((w) => w.length > 1 && !/^(stuff|things|ingredients|food|items)$/.test(w));
+  for (const w of [...new Set(words)].slice(0, 12)) {
+    const top = matchIngredient(w, cat, { min: 0.6 });
+    if (!top) { unknown.push(w); continue; }
+    const ids = new Set([top.id]), stem = singular(w.split(" ").pop()), topIng = cat.byId.get(top.id);
+    if (w.split(" ").length === 1 && stem.length > 2) for (const ing of cat.byId.values()) {
+      const nw = ing.name.toLowerCase().replace(/\(.*?\)/g, " ").split(/[^a-z]+/).filter(Boolean).map(singular);
+      if (!nw.length) continue;
+      if (nw[nw.length - 1] === stem || (nw[0] === stem && TYPE_OF.has(ing.id) && TYPE_OF.get(ing.id) === TYPE_OF.get(topIng.id))) ids.add(ing.id);
+    }
+    groups.push({ w, ids: [...ids].slice(0, 8) });
+  }
+  return { groups, unknown };
+}
+
 export function parseRequest(text, ctx = {}) {
   const today = ctx.today || isoDate();
   const cat = ctx.cat;
-  const t = " " + lc(text).replace(/[’']/g, "'").replace(/\s+/g, " ") + " ";
+  let t = " " + lc(text).replace(/[’']/g, "'").replace(/\s+/g, " ") + " ";
   const req = {}, understood = [];
   const say = (key, label) => understood.push({ key, label });
+
+  // --- ingredients already in the kitchen: "the ingredients I have are x, y and z", "using up some spinach"
+  {
+    const HAVE = /\b(?:(?:the )?ingredients? (?:that )?(?:i|we) (?:have|'ve got|got)(?: (?:is|are))?|(?:i|we) (?:have|'ve got|have got|got)(?: got)?(?: (?:some|only|just))?|(?:i|we) (?:want|need|would like) to use(?: up)?|use up|using up|using|in (?:my|our|the) (?:fridge|freezer|pantry|cupboard)s?(?: (?:is|are|there's|there is))?|what i have is|all i have is|(?:something|anything|a meal|a dish|a recipe|recipes|dishes) (?:with|using|that uses?|made with|out of|from))\s*:?\s*([a-z0-9 ,&/'+-]+?)(?=[.;!?]|\s(?:for|in|under|within|budget|but|please|can you|could you|what|make|cook|plan|tonight|today|tomorrow|this|next|no more|less|max)\b|\sand (?:i|we|want|need|would|make|cook|it|please)\b|$)/;
+    const hm = t.match(HAVE);
+    if (hm && !/^\s*(no|not|nothing|none|a family|kids?|children|\d+ (?:kids?|people|children))\b/.test(hm[1]) && !/\b(minutes?|mins?|hours?|days?|budget|people|kids?|children)\b/.test(hm[1])) {
+      const { groups, unknown } = haveGroups(hm[1], cat);
+      if (groups.length) {
+        req.haveGroups = groups; req.have = [...new Set(groups.flatMap((g) => g.ids))];
+        say("have", "Using what you have: " + groups.map((g) => g.w).join(", ") + (unknown.length ? ` (didn't recognise ${unknown.join(", ")})` : ""));
+        t = t.slice(0, hm.index) + " " + t.slice(hm.index + hm[0].length);
+      }
+    }
+  }
 
   // --- who's eating
   let m;
@@ -578,6 +616,12 @@ export function parseRequest(text, ctx = {}) {
   if ((m = t.match(new RegExp(`\\b${NUM} days?\\b(?! a week)`))) && !/minutes? (?:a|per|each) day/.test(m[0])) { req.days = clamp(toNum(m[1]), 1, 14); req.start = req.start || today; }
   if ((m = t.match(new RegExp(`\\b${NUM} weeks?\\b`)))) { req.days = clamp(toNum(m[1]) * 7, 1, 14); req.start = req.start || (/\bnext\b/.test(t) ? nextWeekStart : today); }
   if ((m = t.match(/\b(?:from|starting|start on|beginning) (?:next |this )?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/))) req.start = nextWeekday(today, dayNames.indexOf(m[1]), /\bnext\b/.test(m[0]));
+  const oneMeal = /\b(something|a meal|one meal|a dish|one dish|a recipe|what (?:can|should) (?:i|we) (?:make|cook))\b/.test(t);
+  if (!req.start && (oneMeal || req.have)) {
+    req.start = today; req.days = 1;
+    if (!req.meals) { const h = ctx.hour ?? new Date().getHours(); req.meals = [h < 10 ? "breakfast" : h < 14 ? "lunch" : "dinner"]; say("meals", MEAL_LABEL[req.meals[0]]); }
+    if (req.alts == null) req.alts = 3;
+  }
   if (req.start) say("days", `${req.days || 7} day${(req.days || 7) > 1 ? "s" : ""} from ${dayLabel(req.start)}`);
 
   // --- cuisines
@@ -670,7 +714,7 @@ function addTo(arr, v) { const a = arr ? arr.slice() : []; if (!a.includes(v)) a
    ========================================================================================= */
 export const PLAN_DEFAULTS = {
   start: null, days: 7, meals: ["breakfast", "lunch", "dinner"], people: 2, cuisines: [], diet: "any", goals: [], avoid: [],
-  off: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, budgetPerDay: null, alts: 2, sides: true, leftovers: false, seed: 1, variety: "normal",
+  off: [], have: [], haveGroups: [], maxPrep: null, maxCook: null, maxTotal: null, maxDay: null, budget: null, budgetPerDay: null, alts: 2, sides: true, leftovers: false, seed: 1, variety: "normal",
 };
 
 // recipes: all usable recipes (expanded). ctx: { cat, pricer, favs:Set, today, locked: { "d|meal": slot } }
@@ -729,6 +773,27 @@ export function planMenu(reqIn, recipes, ctx) {
     if (!pool.length) warnings.push(`No ${MEAL_LABEL[meal].toLowerCase()} recipes match all your settings — try relaxing the time limit, diet or things to avoid.`);
     pools[meal] = pool;
   }
+  // Ingredients already in the kitchen: keep to recipes that use as many of them as possible.
+  const haveG = (Array.isArray(req.haveGroups) ? req.haveGroups : []).filter((g) => g && Array.isArray(g.ids) && g.ids.length).map((g) => ({ w: g.w, ids: new Set(g.ids) }));
+  const haveAll = new Set([...(req.have || []), ...haveG.flatMap((g) => [...g.ids])]);
+  const covCache = new Map();
+  const coverage = (r) => {
+    let v = covCache.get(r.id); if (v) return v;
+    const ids = new Set((r.ingredients || []).filter((x) => !x.opt && x.id).map((x) => x.id));
+    const used = haveG.filter((g) => [...g.ids].some((id) => ids.has(id))).length;
+    let toBuy = 0;
+    for (const id of ids) { const ing = cat.byId.get(id); if (ing && !ing.staple && !ing.free && !haveAll.has(id)) toBuy++; }
+    v = { used, toBuy }; covCache.set(r.id, v); return v;
+  };
+  if (haveG.length) for (const meal of req.meals) {
+    const pool = pools[meal]; if (!pool.length) continue;
+    const sub = pool.filter((r) => coverage(r).used >= 1);
+    if (!sub.length) { warnings.push(`No ${MEAL_LABEL[meal].toLowerCase()} recipes use ${haveG.map((g) => g.w).join(", ")} with your other settings — showing other ideas.`); continue; }
+    pools[meal] = sub;
+    const most = Math.max(...sub.map((r) => coverage(r).used));
+    if (most < haveG.length && haveG.length > 1) warnings.push(`No ${MEAL_LABEL[meal].toLowerCase()} recipe uses all of ${haveG.map((g) => g.w).join(", ")} together, so the best ones use ${most} of them.`);
+  }
+
   const poolIds = [...new Set(Object.values(pools).flat().map((r) => r.id))];
   const allCosts = poolIds.map((id) => facts.get(id).f.costPer).filter((x) => x > 0).sort((a, b) => a - b);
   const medianCost = allCosts[Math.floor(allCosts.length / 2)] || 1;
@@ -746,6 +811,7 @@ export function planMenu(reqIn, recipes, ctx) {
     if (goals.has("spicy")) s += ((r.spice ?? 1) - 1) * 0.4;
     s -= (f.costPer / medianCost) * budgetWeight;
     if (ctx.favs && ctx.favs.has(r.id)) s += 0.5;
+    if (haveG.length) { const c = coverage(r); s += c.used * 2 - Math.min(c.toBuy, 10) * 0.2; }
     const last = ctxS.lastUsed.get(r.id);
     if (last != null) s -= req.variety === "high" ? 5 : Math.max(0, 3 - (ctxS.slotIndex - last) * 0.15);
     if (ctxS.dayCuisines.has(r.cuisine) && req.cuisines.length !== 1) s -= 0.25;
@@ -880,6 +946,17 @@ export function menuStats(slots, byId, cat, pricer, people, days) {
    Shopping list
    ========================================================================================= */
 // What a menu needs, ingredient by ingredient, in each ingredient's own unit.
+// For a dish: which of "what you have" it uses, and the other (non-staple) things to get.
+export function haveSplit(r, have, cat) {
+  const hs = new Set(have || []), uses = [], need = [];
+  for (const x of r.ingredients || []) {
+    if (x.opt || !x.id) continue;
+    const ing = cat.byId.get(x.id); if (!ing || ing.free) continue;
+    if (hs.has(x.id)) { if (!uses.includes(ing.name)) uses.push(ing.name); }
+    else if (!ing.staple && !need.includes(ing.name)) need.push(ing.name);
+  }
+  return { uses, need };
+}
 export function shoppingNeeds(slots, byId, cat, pricer) {
   const need = new Map(), loose = new Map();
   for (const s of slots || []) {

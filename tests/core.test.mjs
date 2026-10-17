@@ -243,3 +243,23 @@ test("planner respects the foods tick-list", () => {
   for (const s of meatOnly.slots) { assert.ok(!C.foodTypes(byId.get(s.dishes[0].r)).has("veg"), s.dishes[0].r); }
   assert.ok(meatOnly.slots.some((s) => s.dishes.some((x) => x.side)), "rice/roti sides still allowed when vegetarian dishes are off");
 });
+
+test("cooking from the ingredients you have", () => {
+  const { req, understood } = C.parseRequest("I want to cook for 3 people something italian and the ingredients I have is chicken, tomatoes, onion", { cat, today, hour: 19 });
+  assert.equal(req.people, 3);
+  assert.deepEqual(req.meals, ["dinner"]);
+  assert.equal(req.days, 1);
+  assert.deepEqual(req.cuisines, ["Italian"]);
+  assert.deepEqual(req.haveGroups.map((g) => g.w), ["chicken", "tomatoes", "onion"]);
+  assert.ok(req.have.includes("chicken_thigh") && req.have.includes("chopped_tomatoes"));
+  assert.ok(understood.some((u) => u.key === "have"));
+  const plan = C.planMenu(req, recipes, { cat, pricer, today });
+  const r = byId.get(plan.slots[0].dishes[0].r);
+  assert.equal(r.cuisine, "Italian");
+  assert.equal(C.haveSplit(r, req.have, cat).uses.length, 3, r.name);
+  // a weekly plan isn't turned into one meal, and "no mushrooms" isn't something you have
+  const wk = C.parseRequest("Plan dinners with rice for 4 next week", { cat, today }).req;
+  assert.equal(wk.days, 7); assert.equal(wk.have, undefined);
+  const no = C.parseRequest("I have no mushrooms, plan dinners this week", { cat, today }).req;
+  assert.equal(no.have, undefined); assert.ok(no.avoid.includes("mushroom"));
+});

@@ -100,9 +100,10 @@ function buildView(el, menuId) {
   const slots = B.menus.flatMap((id) => (S.doc.menus.find((m) => m.id === id) || { slots: [] }).slots);
   const needs = C.shoppingNeeds(slots, S.byId, S.cat, S.pricer);
   const onList = new Map(); for (const it of S.doc.list.items) if (!it.checked && it.ing) onList.set(it.ing, (onList.get(it.ing) || 0) + (it.amount || 0));
+  const haveIds = new Set(B.menus.flatMap((id) => { const m = S.doc.menus.find((x) => x.id === id); return (m && m.req && m.req.have) || []; }));
   for (const n of needs) {
     const key = n.id || "x:" + n.name;
-    if (!B.sel[key]) { const have = n.id ? onList.get(n.id) || 0 : 0; B.sel[key] = { on: !n.staple && !(have >= n.amount * 0.95 && n.amount), amount: n.id ? Math.max(0, Math.round((n.amount - have) * 10) / 10) || n.amount : 0 }; }
+    if (!B.sel[key]) { const have = n.id ? onList.get(n.id) || 0 : 0; B.sel[key] = { on: !n.staple && !haveIds.has(n.id) && !(have >= n.amount * 0.95 && n.amount), amount: n.id ? Math.max(0, Math.round((n.amount - have) * 10) / 10) || n.amount : 0 }; }
   }
   const main = needs.filter((n) => !n.staple), staples = needs.filter((n) => n.staple);
   const chosen = needs.filter((n) => B.sel[n.id || "x:" + n.name].on);
@@ -114,7 +115,7 @@ function buildView(el, menuId) {
     const p = n.id && S.pricer.per(n.id);
     const have = n.id && onList.get(n.id);
     return `<div class="need ${s.on ? "" : "off"}"><input type="checkbox" data-on="bd-on" data-k="${esc(key)}" ${s.on ? "checked" : ""} aria-label="Buy ${esc(n.name)}">
-      <div><div class="nm">${esc(n.name)}</div><div class="why">${esc(n.display)}${n.buy && ing && ing.unit !== "pc" ? ` · usually ${esc(n.buy)}` : ""}${have ? ` · ${esc(C.fmtBase(have, ing))} already on your list` : ""} · ${esc(n.recipes.slice(0, 3).join(", "))}${n.recipes.length > 3 ? "…" : ""}</div></div>
+      <div><div class="nm">${esc(n.name)}</div><div class="why">${esc(n.display)}${n.buy && ing && ing.unit !== "pc" ? ` · usually ${esc(n.buy)}` : ""}${have ? ` · ${esc(C.fmtBase(have, ing))} already on your list` : ""}${n.id && haveIds.has(n.id) ? " · you said you have this" : ""} · ${esc(n.recipes.slice(0, 3).join(", "))}${n.recipes.length > 3 ? "…" : ""}</div></div>
       ${n.id ? `<label class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" min="0" step="any" data-on="bd-amt" data-k="${esc(key)}" value="${esc(s.amount)}" aria-label="Amount of ${esc(n.name)} to buy"><span class="sub small">${unitOf(n)}</span></label>` : `<span class="sub small">as needed</span>`}
       <span class="pr num small">${p && n.id ? money(p.p * s.amount) : ""}${p && p.src === "bill" ? "" : p ? "<span class='muted'>*</span>" : ""}</span></div>`;
   };
