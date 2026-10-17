@@ -98,6 +98,7 @@ function candidate(r) {
   if (prep == null && cook != null) prep = 0;
   if (cook == null && prep != null) cook = 0;
   const servings = r.servings && r.servings >= 1 && r.servings <= 24 ? Math.round(r.servings) : null;
+  if (!r.title || String(r.title).replace(/[^a-z]/gi, "").length < 4) { rejected.incomplete++; return null; }
   if (prep == null || cook == null || prep + cook <= 0 || prep + cook > 600 || !servings || steps.length < 2 || r.lines.length < 3 || r.lines.length > 35) { rejected.incomplete++; return null; }
   let lines, guessed = 0;
   if (r.src === "fc") {
@@ -135,7 +136,8 @@ function candidate(r) {
   const mealCat = meals.includes("dessert") ? "dessert" : meals.length === 1 && meals[0] === "snack" ? "snack" : meals.length === 1 && meals[0] === "side" ? "side" : "main";
   const nu = r.nu && r.nu[0] && servings ? r.nu.map((v) => (v == null ? null : Math.round(v * 10) / 10)) : null;
   const id = `l:${r.src}${r.sid}`;
-  const title = String(r.title).replace(/\s+/g, " ").trim().slice(0, 100);
+  let title = String(r.title).replace(/\s+/g, " ").trim().replace(/^["'“”]+|["'“”]+$/g, "").slice(0, 100);
+  if ((title.match(/"/g) || []).length % 2) title = title.replace(/"/g, "");
   return {
     score, cuisine, mealCat, hash: hash52(dedupeKey(r)), tnorm: normTitle(title),
     rec: { id, name: title, cuisine, meals, servings, prep, cook, diet, ft, spice: spiceOf(ok, servings), with: sideOf(r, cuisine, meals), nu,

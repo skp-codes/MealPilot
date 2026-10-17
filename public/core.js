@@ -313,6 +313,8 @@ const WORD_NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
 export function parseIngredientLine(line, cat, opts = {}) {
   let text = String(line || "").replace(/<[^>]*>/g, " ").replace(/^[\s•*·\-–▢□✓]+/, "").replace(/\s+/g, " ").trim();
   if (!text) return null;
+  // Section headings inside ingredient lists ("SAUCE", "For the dressing:") aren't ingredients.
+  if (/:$/.test(text) || (/^[A-Z][A-Z\s&\-]{2,30}$/.test(text) && !/\d/.test(text)) || /^for the\b/i.test(text) && text.length < 40) return null;
   const original = text;
   const notes = [];
   text = text.replace(/\(([^)]*)\)/g, (m, inner) => { notes.push(inner.trim()); return " "; }).replace(/\s+/g, " ").trim();
@@ -354,10 +356,23 @@ export function parseIngredientLine(line, cat, opts = {}) {
   name = name.replace(/\b(to taste|as needed|as required|for garnish|optional)\b/gi, "").trim();
   if (notes.length) note = [note, ...notes].filter(Boolean).join("; ");
   const optional = /optional/i.test(original);
-  let m = matchIngredient(name, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(name.split(" ").slice(-2).join(" "), cat, { min: 0.62 });
+  // "crushed tomatoes with green chilies" → the thing before "with"
+  const core = name.split(/\s+(?:with|in|packed in|on|for)\s+/i)[0] || name;
+  let m = matchIngredient(core, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(name, cat, { aliases: opts.aliases, min: 0.5 }) || matchIngredient(core.split(" ").slice(-2).join(" "), cat, { min: 0.62 });
   // "salt and pepper", "oil or butter": use the first thing named when the whole phrase isn't a clear match.
   if ((!m || m.score < 0.9) && /\s(and|or|&)\s/i.test(name)) { const first = matchIngredient(name.split(/\s(?:and|or|&)\s/i)[0], cat, { min: 0.6 }); if (first && (!m || first.score > m.score)) m = first; }
   if (m && m.id === "pepper" && /\bpeppers\b/i.test(name) && cat.byId.has("bell_pepper")) m = { id: "bell_pepper", score: m.score };   // "2 peppers" = bell peppers
+  // Tinned versions when the line says it's a can/tin.
+  if (m && (unit === "tin" || /\b(cans?|tins?|canned|tinned)\b/i.test(original))) { const tinned = { rajma: "kidney_tin", chickpeas: "chickpeas_tin", tomato: "chopped_tomatoes", tuna: "tuna_tin" }[m.id]; if (tinned && cat.byId.has(tinned)) m = { id: tinned, score: m.score }; }
+  // Counted parts of an ingredient: "2 garlic cloves", "4 lettuce leaves", "3 slices bacon" with no unit word first.
+  if (m && q != null && (!unit || unit === "pc")) {
+    const ingm = cat.byId.get(m.id);
+    if (/\bcloves?\b/i.test(name) && ingm && ingm.clove) unit = "clove";
+    else if (/\bleaves\b|\bleaf\b/i.test(name) && ingm && ingm.unit !== "pc") { q = q * (["produce"].includes(ingm.aisle) && !ingm.pc ? 0.5 : ingm.aisle === "spices" ? 0.2 : 10); unit = "g"; }
+    else if (/\bsprigs?\b/i.test(name)) unit = "sprig";
+    else if (/\b(stalks?|ribs?)\b/i.test(name) && m.id === "celery") { q = q * 40; unit = "g"; }
+    else if (/\bears?\b/i.test(name) && m.id === "sweetcorn") { q = q * 90; unit = "g"; }
+  }
   const ing = m ? cat.byId.get(m.id) : null;
   const amount = ing ? toBase(q ?? defaultQty(ing), q == null ? defaultUnit(ing) : unit, ing) : 0;
   return { text: original, q, u: unit || (q == null ? null : "pc"), name: name || original, note, opt: optional,
