@@ -74,14 +74,21 @@ function refreshList() {
   if (more) more.hidden = list.length <= F.limit;
 }
 
+// Whether the shared library (about 50,000 recipes) is in use; shown wherever recipes are listed.
+export function libNotice(skipLoading) {
+  if (S.local) return "";
+  if (LIB.status === "none") return `<p class="msg" style="margin-bottom:10px">Only the ${S.recipes.length.toLocaleString()} starter recipes are available: the shared recipe library isn't on the server yet. Once it's uploaded, about 50,000 more appear everywhere recipes are listed.</p>`;
+  if (LIB.status === "error") return `<p class="msg bad" style="margin-bottom:10px">${esc(LIB.error || "The recipe library didn't load.")} <button class="link" data-act="lib-retry">Try again</button></p>`;
+  if (LIB.status === "loading" && !skipLoading) return `<p class="msg" style="margin-bottom:10px">Loading the recipe library (${LIB.count.toLocaleString()} recipes)…</p>`;
+  return "";
+}
 screen("recipes", (el) => {
   const list = filtered();
   el.innerHTML = `
     <div class="head"><div><h1>Recipes</h1><p>${S.recipes.filter((r) => !(r.meals.length === 1 && r.meals[0] === "side")).length.toLocaleString()} recipes · ${S.doc.recipes.length} added by your household</p></div>
       <button class="btn" data-act="add-recipe">${icon("plus")} Add a recipe</button></div>
     ${LIB.status === "loading" ? `<div class="msg" style="margin-bottom:10px">Loading the recipe library (${LIB.count.toLocaleString()} recipes)… <div class="progress" style="margin-top:6px"><i id="libProgress" style="width:${Math.round(LIB.progress * 100)}%"></i></div></div>` : ""}
-    ${LIB.status === "none" && !S.local ? `<p class="msg" style="margin-bottom:10px">The shared recipe library isn't on the server yet, so only the starter recipes are shown. Once it's uploaded and the site redeployed, about 50,000 more appear here.</p>` : ""}
-    ${LIB.status === "error" ? `<p class="msg bad" style="margin-bottom:10px">${esc(LIB.error || "The recipe library didn't load.")} <button class="link" data-act="lib-retry">Try again</button></p>` : ""}
+    ${libNotice(true)}
     <div class="row" style="flex-wrap:nowrap"><input type="search" placeholder="Search by dish or ingredient — e.g. paneer, dosa, quick chicken" value="${esc(F.q)}" data-on="rq" aria-label="Search recipes">
       ${LIB.archiveCount ? `<button class="btn quiet" data-act="search-all" title="Search all ${LIB.archiveCount.toLocaleString()} recipes">${icon("pick")} All</button>` : ""}</div>
     ${filterBar()}
@@ -566,6 +573,7 @@ export function pickRecipe({ title = "Choose a dish", meal = "", onPick, note = 
     const list = filtered({ q: st.q, meal: st.meal, cuisine: st.cuisine, diet: st.diet, time: "", only: "", sort: "name", sides: st.meal === "side" });
     el.innerHTML = `<div class="sheet-head"><h2>${esc(title)}</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">${icon("x")}</button></div>
       ${note ? `<p class="sub" style="margin-bottom:8px">${esc(note)}</p>` : ""}
+      ${libNotice()}
       <input type="search" id="pkQ" placeholder="Search dishes" value="${esc(st.q)}" autofocus>
       <div class="filters"><select id="pkMeal"><option value="">Any meal</option>${["breakfast", "lunch", "dinner", "snack", "side", "dessert"].map((m) => `<option value="${m}" ${m === st.meal ? "selected" : ""}>${C.MEAL_LABEL[m]}</option>`).join("")}</select>
         <select id="pkCuisine"><option value="">All cuisines</option>${cuisinesInUse().map((c) => `<option ${c === st.cuisine ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
