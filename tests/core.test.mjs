@@ -218,3 +218,18 @@ test("shopping list merges and ticks", () => {
   C.applyOp(doc, { type: "listClear" }, u);
   assert.equal(doc.list.items.length, 1);
 });
+
+test("food types filter", () => {
+  const t = (id) => [...C.foodTypes(byId.get(id))].sort().join(",");
+  assert.equal(t("b:butter-chicken"), "chicken");
+  assert.equal(t("b:rajma"), "veg");
+  assert.equal(t("b:egg-bhurji"), "egg");
+  assert.equal(t("b:thai-green-curry"), "chicken,fish");            // fish sauce
+  assert.equal(t("b:full-english"), "egg,pork");
+  assert.equal(t("b:pad-thai"), "egg,fish,prawns");
+  const noBeef = recipes.filter((r) => C.typesAllowed(r, new Set(["beef"])));
+  assert.ok(!noBeef.some((r) => r.ingredients.some((i) => i.id === "beef_mince")));
+  const vegOnly = recipes.filter((r) => C.typesAllowed(r, new Set(C.FOOD_TYPES.filter((x) => x.k !== "veg").map((x) => x.k))));
+  assert.ok(vegOnly.length > 40 && vegOnly.every((r) => ["veg", "vegan"].includes(r.diet)), vegOnly.filter((r) => !["veg", "vegan"].includes(r.diet)).map((r) => r.id).join());
+  const m = C.parseIngredientLine("500g fresh mussels, cleaned", cat); assert.equal(m.id, "mussels");
+});

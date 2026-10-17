@@ -217,6 +217,11 @@ td{padding:8px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 /* ---------- recipes ---------- */
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
 .filters select{width:auto;min-height:36px;padding:5px 9px;font-size:.88rem}
+.multi{position:relative}
+.multi>summary{min-height:36px;padding:6px 30px 6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:.88rem;font-weight:400;white-space:nowrap;position:relative}
+.multi>summary::before{position:absolute;right:11px;top:12px;margin:0;transform:rotate(45deg);width:6px;height:6px}
+.multi[open]>summary::before{transform:rotate(-135deg);top:15px}
+.multi .pop{position:absolute;z-index:15;top:calc(100% + 6px);left:0;width:min(340px,calc(100vw - 32px));background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(10,20,24,.18);padding:10px 14px;font-size:.92rem}
 .rlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:12px}
 .rcard{display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;text-align:left;width:100%}
 .rcard:hover{border-color:var(--accent)}

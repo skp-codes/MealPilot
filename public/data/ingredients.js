@@ -102,6 +102,9 @@ export const INGREDIENTS = [
   ["prawns", "Prawns", "meat", "g", 13, 600, [85, 20, 0, 0.5, 0], { packs: [200, 400], a: "shrimp|king prawns|raw prawns|tiger prawns|cooked prawns|jhinga|eral" }],
   ["white_fish", "White fish fillets", "meat", "g", 9, 400, [82, 18, 0, 0.7, 0], { pc: 140, packs: [400, 500], a: "cod|haddock|basa|pollock|tilapia|hake|fish fillets|white fish|seer fish|kingfish|vanjaram|fish" }],
   ["salmon", "Salmon fillets", "meat", "g", 16, 2500, [208, 20, 0, 13, 0], { pc: 120, packs: [240, 500], a: "salmon|salmon fillet|salmon fillets|smoked salmon" }],
+  ["mussels", "Mussels", "meat", "g", 6, 600, [86, 12, 3.7, 2.2, 0], { packs: [500, 1000], a: "mussels|fresh mussels|live mussels|clams|cockles|oysters|scallops" }],
+  ["squid", "Squid / calamari", "meat", "g", 10, 500, [92, 15.6, 3.1, 1.4, 0], { packs: [300, 500], a: "squid|calamari|squid rings|octopus|cuttlefish" }],
+  ["crab", "Crab / lobster meat", "meat", "g", 25, 1200, [97, 19, 0, 1.5, 0], { packs: [100, 200], a: "crab|crab meat|white crab meat|lobster|lobster tail|crayfish" }],
   ["tuna_tin", "Tinned tuna", "meat", "g", 8, 1000, [116, 26, 0, 1, 0], { tin: 112, packs: [112, 336], a: "tuna|canned tuna|tuna chunks|tuna in brine|tuna in spring water|tinned tuna" }],
 
   // ---------- frozen ----------

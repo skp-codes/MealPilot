@@ -13,6 +13,36 @@ export const GOALS = {
   "high-protein": "Protein-rich", "kid-friendly": "Kid-friendly", "low-carb": "Low-carb", light: "Light",
   budget: "Budget-friendly", "high-fibre": "High-fibre", mild: "Mild", spicy: "Spicy",
 };
+// What's in a dish, for the "Contains" filter. Seafood is split so you can keep, say, fish but not prawns.
+export const FOOD_TYPES = [
+  { k: "veg", label: "Vegetarian (no meat, fish or eggs)", ids: [] },
+  { k: "egg", label: "Eggs", ids: ["eggs"] },
+  { k: "chicken", label: "Chicken", ids: ["chicken_breast", "chicken_thigh", "chicken_curry_cut"] },
+  { k: "lamb", label: "Lamb & mutton", ids: ["mutton", "lamb_mince"] },
+  { k: "beef", label: "Beef", ids: ["beef_mince", "beef_steak"] },
+  { k: "pork", label: "Pork, bacon & ham", ids: ["pork", "bacon", "sausages", "chorizo"] },
+  { k: "fish", label: "Fish (cod, haddock, fish sauce…)", group: "seafood", ids: ["white_fish", "fish_sauce"] },
+  { k: "salmon", label: "Salmon", group: "seafood", ids: ["salmon"] },
+  { k: "tuna", label: "Tuna", group: "seafood", ids: ["tuna_tin"] },
+  { k: "prawns", label: "Prawns & shrimp", group: "seafood", ids: ["prawns"] },
+  { k: "shellfish", label: "Mussels, clams & scallops", group: "seafood", ids: ["mussels"] },
+  { k: "squid", label: "Squid & octopus", group: "seafood", ids: ["squid"] },
+  { k: "crab", label: "Crab & lobster", group: "seafood", ids: ["crab"] },
+];
+const TYPE_OF = new Map(FOOD_TYPES.flatMap((t) => t.ids.map((id) => [id, t.k])));
+// The food types in a recipe (optional ingredients count too, so a deselected food never sneaks in). No meat/fish/eggs → "veg".
+export function foodTypes(recipe) {
+  const out = new Set();
+  for (const x of recipe.ingredients || []) { const t = x.id && TYPE_OF.get(x.id); if (t) out.add(t); }
+  if (![...out].some((t) => t !== "egg")) { if (!out.size) out.add("veg"); }
+  return out;
+}
+// `off` = the types switched off. A dish shows only if none of its types are off (eggs-only dishes need eggs on).
+export function typesAllowed(recipe, off) {
+  if (!off || !off.size) return true;
+  for (const t of foodTypes(recipe)) if (off.has(t)) return false;
+  return true;
+}
 export const SIDE_RECIPES = { rice: "b:steamed-rice", roti: "b:chapati", chutney: "b:coconut-chutney", raita: "b:raita", naan: "b:warm-naan", bread: "b:toast", salad: "b:green-salad" };
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -414,7 +444,7 @@ const NUM = "(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelv
 const toNum = (s) => (/^\d/.test(s) ? Number(s) : NUM_WORDS[s] ?? null);
 const AVOID_GROUPS = {
   meat: ["chicken_breast", "chicken_thigh", "chicken_curry_cut", "mutton", "lamb_mince", "beef_mince", "beef_steak", "pork", "bacon", "sausages", "chorizo"],
-  fish: ["white_fish", "salmon", "prawns", "tuna_tin", "fish_sauce"], seafood: ["white_fish", "salmon", "prawns", "tuna_tin", "fish_sauce"],
+  fish: ["white_fish", "salmon", "tuna_tin", "fish_sauce"], seafood: ["white_fish", "salmon", "prawns", "tuna_tin", "fish_sauce", "mussels", "squid", "crab"], shellfish: ["prawns", "mussels", "crab", "squid"], mussel: ["mussels"], crab: ["crab"], squid: ["squid"], salmon: ["salmon"], tuna: ["tuna_tin"],
   prawn: ["prawns"], shrimp: ["prawns"], beef: ["beef_mince", "beef_steak"], pork: ["pork", "bacon", "sausages", "chorizo"],
   chicken: ["chicken_breast", "chicken_thigh", "chicken_curry_cut"], lamb: ["mutton", "lamb_mince"], mutton: ["mutton", "lamb_mince"],
   egg: ["eggs"], dairy: ["milk", "yogurt", "greek_yogurt", "paneer", "butter", "ghee", "cream", "cheddar", "mozzarella", "parmesan", "feta", "halloumi"],
@@ -723,7 +753,7 @@ export function planMenu(reqIn, recipes, ctx) {
 }
 function mainProtein(r) {
   const ids = (r.ingredients || []).map((x) => x.id);
-  for (const p of ["chicken_breast", "chicken_thigh", "chicken_curry_cut", "mutton", "lamb_mince", "beef_mince", "beef_steak", "pork", "white_fish", "salmon", "prawns", "paneer", "eggs", "tofu"])
+  for (const p of ["chicken_breast", "chicken_thigh", "chicken_curry_cut", "mutton", "lamb_mince", "beef_mince", "beef_steak", "pork", "white_fish", "salmon", "prawns", "mussels", "squid", "crab", "paneer", "eggs", "tofu"])
     if (ids.includes(p)) return p.replace(/_.*/, "");
   return null;
 }

@@ -2,7 +2,9 @@
 import { S, C, ACT, ON, screen, sheet, closeSheet, refreshSheet, commit, toast, esc, money, mins, dietDot, icon, recipe, ingredient, me, isAdmin, api, ask, store, recipeFactsFor, go } from "./state.js";
 import { addToDraft, draftExists } from "./plan.js";
 
-const F = Object.assign({ q: "", cuisine: "", meal: "", diet: "", time: "", only: "", sort: "name", limit: 60 }, store.get("recipeFilters", {}));
+const F = Object.assign({ q: "", cuisine: "", meal: "", diet: "", off: [], time: "", only: "", sort: "name", limit: 60 }, store.get("recipeFilters", {}));
+if (!Array.isArray(F.off)) F.off = [];
+if (F.diet && F.diet !== "vegan") F.diet = "";                       // older saved filters
 const saveF = () => store.set("recipeFilters", Object.assign({}, F, { limit: 60 }));
 
 /* ---------- list ---------- */
@@ -17,6 +19,8 @@ function filtered(opts = {}) {
     if (cuisine && r.cuisine !== cuisine) continue;
     if (meal && !(r.meals || []).includes(meal)) continue;
     if (diet && !C.dietAllows(diet, r.diet)) continue;
+    const off = opts.off ?? F.off;
+    if (off.length && !C.typesAllowed(r, new Set(off))) continue;
     if (time && (r.total || 0) > time) continue;
     if (only === "fav" && !S.favs.has(r.id)) continue;
     if (only === "mine" && r.builtIn) continue;
@@ -51,12 +55,66 @@ function filterBar(prefix = "rf") {
   return `<div class="filters">
     <select data-on="${prefix}" data-k="cuisine" aria-label="Cuisine">${opt("", "All cuisines", F.cuisine)}${cuisinesInUse().map((c) => opt(c, c, F.cuisine)).join("")}</select>
     <select data-on="${prefix}" data-k="meal" aria-label="Meal">${opt("", "Any meal", F.meal)}${["breakfast", "lunch", "dinner", "snack", "side"].map((m) => opt(m, C.MEAL_LABEL[m], F.meal)).join("")}</select>
-    <select data-on="${prefix}" data-k="diet" aria-label="Diet">${opt("", "Any diet", F.diet)}${opt("egg", "Vegetarian + eggs", F.diet)}${opt("veg", "Vegetarian", F.diet)}${opt("vegan", "Vegan", F.diet)}</select>
+    ${foodPicker()}
     <select data-on="${prefix}" data-k="time" aria-label="Time">${opt("", "Any time", F.time)}${["15", "20", "30", "45", "60"].map((t) => opt(t, `Up to ${t} min`, F.time)).join("")}</select>
     <select data-on="${prefix}" data-k="only" aria-label="Show">${opt("", "All recipes", F.only)}${opt("fav", "Favourites", F.only)}${opt("mine", "Household recipes", F.only)}${opt("protein", "Protein-rich", F.only)}${opt("kid", "Kid-friendly", F.only)}</select>
     <select data-on="${prefix}" data-k="sort" aria-label="Sort">${opt("name", "A–Z", F.sort)}${opt("time", "Quickest", F.sort)}${opt("cost", "Cheapest", F.sort)}${opt("protein", "Most protein", F.sort)}</select>
   </div>`;
 }
+/* ---------- "Contains" picker: tick the foods you want, untick the ones you don't ---------- */
+function foodLabel() {
+  if (F.diet === "vegan") return "Vegan only";
+  const on = C.FOOD_TYPES.filter((t) => !F.off.includes(t.k));
+  if (!F.off.length) return "Any food";
+  if (!on.length) return "Nothing selected";
+  if (on.length === 1) return on[0].label.replace(/ \(.*\)$/, "") + " only";
+  if (on.every((t) => t.k === "veg" || t.k === "egg" || t.group === "seafood") && on.length === 2 + C.FOOD_TYPES.filter((t) => t.group === "seafood").length) return "Vegetarian + fish";
+  if (F.off.length <= 2) return "No " + C.FOOD_TYPES.filter((t) => F.off.includes(t.k)).map((t) => t.label.replace(/ \(.*\)$/, "").toLowerCase()).join(", no ");
+  return `${on.length} of ${C.FOOD_TYPES.length} foods`;
+}
+let pickerOpen = false;
+function foodPicker() {
+  const off = new Set(F.off);
+  const box = (t) => `<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-weight:400"><input type="checkbox" data-on="ftype" value="${t.k}" ${off.has(t.k) ? "" : "checked"} ${F.diet === "vegan" ? "disabled" : ""}> ${esc(t.label)}${t.hint ? ` <span class="sub small">— ${esc(t.hint)}</span>` : ""}</label>`;
+  const sea = C.FOOD_TYPES.filter((t) => t.group === "seafood"), seaOn = sea.filter((t) => !off.has(t.k)).length;
+  return `<details class="multi" id="foodPick" ${pickerOpen ? "open" : ""}><summary aria-label="Foods to include">${esc(foodLabel())}</summary><div class="pop">
+    ${C.FOOD_TYPES.filter((t) => !t.group).map(box).join("")}
+    <label class="row" style="gap:8px;padding:5px 0;margin-top:4px"><input type="checkbox" data-on="ftype-sea" ${seaOn === sea.length ? "checked" : ""} ${F.diet === "vegan" ? "disabled" : ""}> <b>Seafood</b> <span class="sub small">${seaOn === sea.length ? "all" : seaOn ? `${seaOn} of ${sea.length}` : "none"}</span></label>
+    <div style="padding-left:26px">${sea.map(box).join("")}</div>
+    <hr style="margin:8px 0">
+    <label class="row" style="gap:8px;padding:5px 0"><input type="checkbox" data-on="fvegan" ${F.diet === "vegan" ? "checked" : ""}> Vegan only (no dairy, eggs or honey)</label>
+    <div class="row" style="margin-top:8px"><button class="btn quiet sm" data-act="ftype-all">Select all</button><button class="btn quiet sm" data-act="ftype-none">Clear all</button><button class="btn quiet sm" data-act="ftype-veg">Vegetarian</button><button class="btn quiet sm" data-act="ftype-pesc">Vegetarian + fish</button></div>
+  </div></details>`;
+}
+function refreshList() {
+  saveF();
+  const list = filtered();
+  const box = document.getElementById("rlist");
+  if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3><p>Try fewer filters, or tick more foods.</p></div>`;
+  // Update the picker in place so it stays open and keeps keyboard focus.
+  const pick = document.getElementById("foodPick");
+  if (pick) {
+    const off = new Set(F.off), sea = C.FOOD_TYPES.filter((t) => t.group === "seafood"), seaOn = sea.filter((t) => !off.has(t.k)).length;
+    pick.querySelector("summary").textContent = foodLabel();
+    pick.querySelectorAll("[data-on=ftype]").forEach((x) => { x.checked = !off.has(x.value); x.disabled = F.diet === "vegan"; });
+    const s = pick.querySelector("[data-on=ftype-sea]"); s.checked = seaOn === sea.length; s.indeterminate = seaOn > 0 && seaOn < sea.length; s.disabled = F.diet === "vegan";
+    s.parentElement.querySelector(".sub").textContent = seaOn === sea.length ? "all" : seaOn ? `${seaOn} of ${sea.length}` : "none";
+    pick.querySelector("[data-on=fvegan]").checked = F.diet === "vegan";
+  }
+  const more = document.getElementById("rmore");
+  if (more) more.hidden = list.length <= F.limit;
+}
+const setOff = (keys) => { F.off = [...new Set(keys)]; F.limit = 60; refreshList(); };
+ON["ftype"] = (el) => setOff(el.checked ? F.off.filter((k) => k !== el.value) : [...F.off, el.value]);
+ON["ftype-sea"] = (el) => { const sea = C.FOOD_TYPES.filter((t) => t.group === "seafood").map((t) => t.k); setOff(el.checked ? F.off.filter((k) => !sea.includes(k)) : [...F.off, ...sea]); };
+ON["fvegan"] = (el) => { F.diet = el.checked ? "vegan" : ""; F.limit = 60; refreshList(); };
+ACT["ftype-all"] = () => { F.diet = ""; setOff([]); };
+ACT["ftype-none"] = () => setOff(C.FOOD_TYPES.map((t) => t.k));
+ACT["ftype-veg"] = () => { F.diet = ""; setOff(C.FOOD_TYPES.filter((t) => t.k !== "veg").map((t) => t.k)); };
+ACT["ftype-pesc"] = () => { F.diet = ""; setOff(C.FOOD_TYPES.filter((t) => t.k !== "veg" && t.k !== "egg" && t.group !== "seafood").map((t) => t.k)); };
+document.addEventListener("toggle", (e) => { if (e.target.id === "foodPick") pickerOpen = e.target.open; }, true);
+document.addEventListener("click", (e) => { const p = document.getElementById("foodPick"); if (p && p.open && !p.contains(e.target)) { p.open = false; pickerOpen = false; } });
+
 screen("recipes", (el) => {
   const list = filtered();
   el.innerHTML = `
@@ -65,7 +123,7 @@ screen("recipes", (el) => {
     <input type="search" placeholder="Search by dish or ingredient — e.g. paneer, dosa, quick chicken" value="${esc(F.q)}" data-on="rq" aria-label="Search recipes">
     ${filterBar()}
     <div class="rlist" id="rlist">${list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3><p>Try fewer filters, or add your own recipe.</p></div>`}</div>
-    ${list.length > F.limit ? `<div class="row" style="justify-content:center;margin-top:14px"><button class="btn quiet" data-act="more-recipes">Show more (${list.length - F.limit} left)</button></div>` : ""}`;
+    <div class="row" id="rmore" style="justify-content:center;margin-top:14px" ${list.length > F.limit ? "" : "hidden"}><button class="btn quiet" data-act="more-recipes">Show more</button></div>`;
 });
 ON["rq:input"] = (el) => { F.q = el.value; saveF(); const list = filtered(); const box = document.getElementById("rlist"); if (box) box.innerHTML = list.slice(0, F.limit).map((x) => recipeCard(x)).join("") || `<div class="empty" style="grid-column:1/-1"><h3>No recipes match</h3></div>`; };
 ON["rf"] = (el) => { F[el.dataset.k] = el.value; F.limit = 60; saveF(); go("recipes"); };
